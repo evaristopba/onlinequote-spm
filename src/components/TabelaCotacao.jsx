@@ -1,6 +1,8 @@
 import{formatarInputPreco}from'../utils/ptBR.js'
 export default function TabelaCotacao({produtos,precos,participantes,meuMercado,onPrecoChange}){
-  const mercados=[...new Set(Object.values(participantes).map(p=>p.mercado))]
+  // Ordena alfabeticamente: o Firestore não garante a ordem das chaves de um
+  // campo mapa, então sem isso cada participante via as colunas em ordem diferente.
+  const mercados=[...new Set(Object.values(participantes).map(p=>p.mercado))].sort((a,b)=>a.localeCompare(b,'pt-BR'))
   return<div style={{overflowX:'auto'}}>
     <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.88rem'}}>
       <thead><tr>

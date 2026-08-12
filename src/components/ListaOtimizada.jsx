@@ -1,6 +1,6 @@
 import{formatarMoeda}from'../utils/ptBR.js'
 export default function ListaOtimizada({produtos,precos,participantes}){
-  const mercados=[...new Set(Object.values(participantes).map(p=>p.mercado))]
+  const mercados=[...new Set(Object.values(participantes).map(p=>p.mercado))].sort((a,b)=>a.localeCompare(b,'pt-BR'))
   const grupos={};let totalOpt=0,totalMax=0,mercadosUsados=new Set();const categorias={}
   produtos.forEach(p=>{
     let menor=Infinity,mercMenor=null,maior=0
