@@ -99,7 +99,7 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
     produtos: produtos.map((p, i) => ({
       id: `p${i}`,
       nome: p.nome,
-      quantidade: p.quantidade || '1 un',
+      quantidade: p.quantidade || '1.000 un',
       codigo: p.codigo || null,
       categoria: p.categoria || 'Outros',
     })),
@@ -173,7 +173,7 @@ export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = 
   if (!db) throw new Error('Firebase nao inicializado')
   const id = `p${Date.now()}`
   await updateDoc(doc(db, 'salas', codigo), {
-    produtos: arrayUnion({ id, nome, quantidade: quantidade || '1 un', codigo: codigoBarras, categoria }),
+    produtos: arrayUnion({ id, nome, quantidade: quantidade || '1.000 un', codigo: codigoBarras, categoria }),
   })
   return id
 }

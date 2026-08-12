@@ -18,7 +18,7 @@ export default function CriarSala(){
   const[buscando,setBuscando]=useState(false)
 
   const addManual=()=>{
-    setMostrarProdutoModal({titulo:'➕ Adicionar produto',inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros'}})
+    setMostrarProdutoModal({titulo:'➕ Adicionar produto',inicial:{nome:'',quantidade:'',categoria:'Outros'}})
   }
 
   const processarCodigo=async(codigo)=>{
@@ -26,7 +26,7 @@ export default function CriarSala(){
     // 1. Busca na base própria
     const proprio=await buscarProdutoBasePropria(codigo)
     if(proprio){
-      setMostrarProdutoModal({titulo:'✅ Produto encontrado na base própria',inicial:{nome:proprio.nome,quantidade:proprio.quantidade||'1 unidade',categoria:proprio.categoria||'Outros',codigo:proprio.codigoBarras}})
+      setMostrarProdutoModal({titulo:'✅ Produto encontrado na base própria',inicial:{nome:proprio.nome,quantidade:proprio.quantidade||'',categoria:proprio.categoria||'Outros',codigo:proprio.codigoBarras}})
       setBuscando(false);return
     }
     // 2. Busca na Open Food Facts
@@ -37,14 +37,14 @@ export default function CriarSala(){
       setBuscando(false);return
     }
     // 3. Manual
-    setMostrarProdutoModal({titulo:`🔎 Código ${codigo} não encontrado — cadastre manualmente`,inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros',codigo}})
+    setMostrarProdutoModal({titulo:`🔎 Código ${codigo} não encontrado — cadastre manualmente`,inicial:{nome:'',quantidade:'',categoria:'Outros',codigo}})
     setBuscando(false)
   }
 
   const handleScan=(codigo)=>{setMostrarScanner(false);processarCodigo(codigo)}
   const handleSalvoNaBase=(dados)=>{
     setMostrarCadastro(null)
-    setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'1 unidade',categoria:dados.categoria,codigo:dados.codigo}})
+    setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'',categoria:dados.categoria,codigo:dados.codigo}})
   }
   const handleConfirmarProduto=(dados)=>{
     setProdutos(p=>[...p,dados])

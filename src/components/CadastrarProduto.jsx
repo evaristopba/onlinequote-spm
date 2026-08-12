@@ -1,15 +1,20 @@
 import{useState}from'react'
 import{salvarProdutoBasePropria}from'../firebase.js'
+import{formatarQuantidade,parseQuantidadeExistente}from'../utils/ptBR.js'
 const CATEGORIAS=['Alimentos','Bebidas','Limpeza','Higiene','Frios e Laticínios','Padaria','Açougue','Outros']
 export default function CadastrarProduto({dadosIniciais,onSalvo,onCancelar}){
+  const qtdInicial=parseQuantidadeExistente(dadosIniciais?.quantidade)
   const[nome,setNome]=useState(dadosIniciais?.nome||'')
   const[marca,setMarca]=useState(dadosIniciais?.marca||'')
   const[categoria,setCategoria]=useState('Alimentos')
-  const[quantidade,setQuantidade]=useState(dadosIniciais?.quantidade||'')
-  const[unidade,setUnidade]=useState('')
+  const[valorQtd,setValorQtd]=useState(qtdInicial.valor)
+  const[unidade,setUnidade]=useState(qtdInicial.unidade)
   const[carregando,setCarregando]=useState(false)
   const handleSalvar=async()=>{
     if(!nome.trim())return alert('Nome é obrigatório')
+    const v=parseFloat(String(valorQtd).replace(',','.'))
+    if(isNaN(v)||v<=0)return alert('Quantidade precisa ser um número maior que zero')
+    const quantidadeFormatada=formatarQuantidade(v,unidade.trim()||'un')
     setCarregando(true)
     try{
       await salvarProdutoBasePropria({
@@ -17,11 +22,11 @@ export default function CadastrarProduto({dadosIniciais,onSalvo,onCancelar}){
         nome:nome.trim(),
         marca:marca.trim(),
         categoria,
-        quantidade:quantidade.trim(),
+        quantidade:quantidadeFormatada,
         unidade:unidade.trim(),
         imagem:dadosIniciais?.imagem||null,
       })
-      onSalvo({nome:nome.trim(),marca:marca.trim(),categoria,quantidade:quantidade.trim(),unidade:unidade.trim(),codigo:dadosIniciais?.codigoBarras||null})
+      onSalvo({nome:nome.trim(),marca:marca.trim(),categoria,quantidade:quantidadeFormatada,unidade:unidade.trim(),codigo:dadosIniciais?.codigoBarras||null})
     }catch(e){alert('Erro ao salvar: '+e.message);setCarregando(false)}
   }
   return<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
@@ -35,9 +40,10 @@ export default function CadastrarProduto({dadosIniciais,onSalvo,onCancelar}){
           {CATEGORIAS.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
         <div style={{display:'flex',gap:8}}>
-          <input placeholder="Quantidade (ex: 5kg)" value={quantidade} onChange={e=>setQuantidade(e.target.value)} style={{...inp,flex:2}}/>
-          <input placeholder="Unidade" value={unidade} onChange={e=>setUnidade(e.target.value)} style={{...inp,flex:1}}/>
+          <input type="number" step="0.001" min="0.001" placeholder="Quantidade" value={valorQtd} onChange={e=>setValorQtd(e.target.value)} style={{...inp,flex:1}}/>
+          <input placeholder="Unidade (kg, L, un...)" value={unidade} onChange={e=>setUnidade(e.target.value)} style={{...inp,flex:1}}/>
         </div>
+        <div style={{fontSize:'0.75rem',color:'#94a3b8'}}>Prévia: {formatarQuantidade(valorQtd,unidade)}</div>
         {dadosIniciais?.imagem&&<img src={dadosIniciais.imagem} alt="" style={{width:80,height:80,objectFit:'contain',borderRadius:8,alignSelf:'center'}}/>}
       </div>
       <div style={{display:'flex',gap:10,marginTop:20}}>

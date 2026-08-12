@@ -1,16 +1,21 @@
 import{useState}from'react'
+import{formatarQuantidade,parseQuantidadeExistente}from'../utils/ptBR.js'
 const CATEGORIAS=['Alimentos','Bebidas','Limpeza','Higiene','Frios e Laticínios','Padaria','Açougue','Outros']
 export default function ProdutoModal({titulo,inicial,onConfirmar,onCancelar}){
+  const qtdInicial=parseQuantidadeExistente(inicial?.quantidade)
   const[nome,setNome]=useState(inicial?.nome||'')
-  const[quantidade,setQuantidade]=useState(inicial?.quantidade||'1 unidade')
+  const[valorQtd,setValorQtd]=useState(qtdInicial.valor)
+  const[unidadeQtd,setUnidadeQtd]=useState(qtdInicial.unidade)
   const[categoria,setCategoria]=useState(inicial?.categoria||'Outros')
   const[salvando,setSalvando]=useState(false)
 
   const handleConfirmar=async()=>{
     if(!nome.trim())return
+    const v=parseFloat(String(valorQtd).replace(',','.'))
+    if(isNaN(v)||v<=0)return alert('Quantidade precisa ser um número maior que zero')
     setSalvando(true)
     try{
-      await onConfirmar({nome:nome.trim(),quantidade:quantidade.trim()||'1 unidade',categoria,codigo:inicial?.codigo||null})
+      await onConfirmar({nome:nome.trim(),quantidade:formatarQuantidade(v,unidadeQtd.trim()||'un'),categoria,codigo:inicial?.codigo||null})
     }catch(e){
       alert('Erro ao adicionar produto: '+e.message)
       setSalvando(false)
@@ -27,9 +32,13 @@ export default function ProdutoModal({titulo,inicial,onConfirmar,onCancelar}){
           <input autoFocus value={nome} onChange={e=>setNome(e.target.value)} onKeyDown={handleKeyDown} style={inp} placeholder="Ex: Arroz 5kg"/>
         </div>
         <div style={{display:'flex',gap:8}}>
-          <div style={{flex:2}}>
+          <div style={{flex:1}}>
             <label style={label}>Quantidade</label>
-            <input value={quantidade} onChange={e=>setQuantidade(e.target.value)} onKeyDown={handleKeyDown} style={inp} placeholder="Ex: 5kg, 1 unidade"/>
+            <input type="number" step="0.001" min="0.001" value={valorQtd} onChange={e=>setValorQtd(e.target.value)} onKeyDown={handleKeyDown} style={inp}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={label}>Unidade</label>
+            <input value={unidadeQtd} onChange={e=>setUnidadeQtd(e.target.value)} onKeyDown={handleKeyDown} style={inp} placeholder="kg, L, un..."/>
           </div>
           <div style={{flex:1}}>
             <label style={label}>Categoria</label>
@@ -38,6 +47,7 @@ export default function ProdutoModal({titulo,inicial,onConfirmar,onCancelar}){
             </select>
           </div>
         </div>
+        <div style={{fontSize:'0.75rem',color:'#94a3b8'}}>Prévia: {formatarQuantidade(valorQtd,unidadeQtd)}</div>
         {inicial?.codigo&&<div style={{fontSize:'0.78rem',color:'#94a3b8'}}>📷 Código de barras: {inicial.codigo}</div>}
       </div>
       <div style={{display:'flex',gap:10,marginTop:20}}>

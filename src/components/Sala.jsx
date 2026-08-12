@@ -45,25 +45,25 @@ export default function Sala(){
 
   const handlePreco=async(pid,m,v)=>{const n=parsePreco(v);if(n===null)return;await lancarPreco(codigo,pid,m,n)}
   const handleAddManual=()=>{
-    setMostrarProdutoModal({titulo:'➕ Adicionar produto',inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros'}})
+    setMostrarProdutoModal({titulo:'➕ Adicionar produto',inicial:{nome:'',quantidade:'',categoria:'Outros'}})
   }
 
   const processarCodigo=async(cb)=>{
     setBuscando(true)
     const proprio=await buscarProdutoBasePropria(cb)
     if(proprio){
-      setMostrarProdutoModal({titulo:'✅ Produto encontrado na base própria',inicial:{nome:proprio.nome,quantidade:proprio.quantidade||'1 unidade',categoria:proprio.categoria||'Outros',codigo:proprio.codigoBarras}})
+      setMostrarProdutoModal({titulo:'✅ Produto encontrado na base própria',inicial:{nome:proprio.nome,quantidade:proprio.quantidade||'',categoria:proprio.categoria||'Outros',codigo:proprio.codigoBarras}})
       setBuscando(false);return
     }
     const off=await buscarProdutoPorCodigo(cb)
     if(off){setMostrarCadastro({...off,codigoBarras:cb});setBuscando(false);return}
-    setMostrarProdutoModal({titulo:`🔎 Código ${cb} não encontrado — cadastre manualmente`,inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros',codigo:cb}})
+    setMostrarProdutoModal({titulo:`🔎 Código ${cb} não encontrado — cadastre manualmente`,inicial:{nome:'',quantidade:'',categoria:'Outros',codigo:cb}})
     setBuscando(false)
   }
   const handleScan=(cb)=>{setMostrarScanner(false);processarCodigo(cb)}
   const handleSalvoNaBase=(dados)=>{
     setMostrarCadastro(null)
-    setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'1 unidade',categoria:dados.categoria,codigo:dados.codigo}})
+    setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'',categoria:dados.categoria,codigo:dados.codigo}})
   }
   const handleConfirmarProduto=async(dados)=>{
     await adicionarProduto(codigo,dados.nome,dados.quantidade,dados.codigo,dados.categoria)

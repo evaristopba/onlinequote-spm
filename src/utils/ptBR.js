@@ -1,3 +1,10 @@
+export const formatarQuantidade=(v,u)=>{const n=parseFloat(v);return`${isNaN(n)?'1.000':n.toFixed(3)} ${u||'un'}`.trim()}
+export const parseQuantidadeExistente=(q)=>{
+  if(!q)return{valor:1,unidade:'un'}
+  const m=String(q).trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/)
+  if(m)return{valor:parseFloat(m[1].replace(',','.'))||1,unidade:m[2]||'un'}
+  return{valor:1,unidade:String(q)}
+}
 export const formatarMoeda=(v)=>{if(v==null||isNaN(v))return'—';return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v)}
 export const formatarInputPreco=(v)=>{if(v==null||isNaN(v))return'';return v.toFixed(2).replace('.',',')}
 export const parsePreco=(v)=>{const n=parseFloat(String(v).replace(/[^\d,]/g,'').replace(',','.'));return isNaN(n)||n<=0?null:n}
