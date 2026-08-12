@@ -1,6 +1,6 @@
 import{useEffect,useState}from'react'
 import{useParams,useNavigate}from'react-router-dom'
-import{escutarSala,escutarPrecos,lancarPreco,adicionarProduto,excluirSala,auth,buscarProdutoBasePropria}from'../firebase.js'
+import{escutarSala,escutarPrecos,lancarPreco,adicionarProduto,editarProduto,removerProduto,excluirSala,auth,buscarProdutoBasePropria}from'../firebase.js'
 import{parsePreco,formatarDataRelativa}from'../utils/ptBR.js'
 import{buscarProdutoPorCodigo}from'../utils/barcode.js'
 import TabelaCotacao from'./TabelaCotacao.jsx'
@@ -66,8 +66,20 @@ export default function Sala(){
     setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'',categoria:dados.categoria,codigo:dados.codigo}})
   }
   const handleConfirmarProduto=async(dados)=>{
-    await adicionarProduto(codigo,dados.nome,dados.quantidade,dados.codigo,dados.categoria)
+    if(mostrarProdutoModal?.editandoProdutoId){
+      await editarProduto(codigo,mostrarProdutoModal.editandoProdutoId,dados)
+    }else{
+      await adicionarProduto(codigo,dados.nome,dados.quantidade,dados.codigo,dados.categoria)
+    }
     setMostrarProdutoModal(null)
+  }
+  const handleEditarProduto=(p)=>{
+    setMostrarProdutoModal({titulo:'✏️ Editar produto',inicial:{nome:p.nome,quantidade:p.quantidade,categoria:p.categoria,codigo:p.codigo},editandoProdutoId:p.id})
+  }
+  const handleRemoverProduto=async(p)=>{
+    if(!confirm(`Remover "${p.nome}" da cotação? Os preços já lançados desse produto também somem.`))return
+    try{await removerProduto(codigo,p.id)}
+    catch(e){alert('Erro ao remover: '+e.message)}
   }
 
   if(naoEncontrada)return<div style={{padding:40,textAlign:'center',color:'#64748b'}}><p>❌ Sala <strong>#{codigo}</strong> não encontrada.</p><button onClick={()=>nav('/entrar')} style={{marginTop:12,padding:'10px 20px',borderRadius:8,border:'none',background:'#3b82f6',color:'white',fontWeight:700}}>Voltar</button></div>
@@ -92,7 +104,7 @@ export default function Sala(){
           <button onClick={handleAddManual} style={btnW}>➕ Manual</button>
         </div>
       </div>
-      <TabelaCotacao produtos={sala.produtos} precos={precos} participantes={sala.participantes} meuMercado={meuMercado} onPrecoChange={handlePreco}/>
+      <TabelaCotacao produtos={sala.produtos} precos={precos} participantes={sala.participantes} meuMercado={meuMercado} onPrecoChange={handlePreco} onEditarProduto={handleEditarProduto} onRemoverProduto={handleRemoverProduto}/>
     </div>
     <ListaOtimizada produtos={sala.produtos} precos={precos} participantes={sala.participantes}/>
     <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>

@@ -1,5 +1,5 @@
 import{formatarInputPreco}from'../utils/ptBR.js'
-export default function TabelaCotacao({produtos,precos,participantes,meuMercado,onPrecoChange}){
+export default function TabelaCotacao({produtos,precos,participantes,meuMercado,onPrecoChange,onEditarProduto,onRemoverProduto}){
   // Ordena alfabeticamente: o Firestore não garante a ordem das chaves de um
   // campo mapa, então sem isso cada participante via as colunas em ordem diferente.
   const mercados=[...new Set(Object.values(participantes).map(p=>p.mercado))].sort((a,b)=>a.localeCompare(b,'pt-BR'))
@@ -15,7 +15,18 @@ export default function TabelaCotacao({produtos,precos,participantes,meuMercado,
           let menor=Infinity,mercMenor='-'
           mercados.forEach(m=>{const v=precos[p.id]?.[m];if(v&&v<menor){menor=v;mercMenor=m}})
           return<tr key={p.id}>
-            <td style={td}><strong>{p.nome}</strong><div style={{fontSize:'0.78rem',color:'#64748b'}}>{p.quantidade}{p.categoria&&` · ${p.categoria}`}</div></td>
+            <td style={td}>
+              <div style={{display:'flex',alignItems:'start',gap:6}}>
+                <div style={{flex:1}}>
+                  <strong>{p.nome}</strong>
+                  <div style={{fontSize:'0.78rem',color:'#64748b'}}>{p.quantidade}{p.categoria&&` · ${p.categoria}`}</div>
+                </div>
+                {(onEditarProduto||onRemoverProduto)&&<div style={{display:'flex',gap:2,flexShrink:0}}>
+                  {onEditarProduto&&<button onClick={()=>onEditarProduto(p)} style={iconBtn} title="Editar produto">✏️</button>}
+                  {onRemoverProduto&&<button onClick={()=>onRemoverProduto(p)} style={{...iconBtn,color:'#ef4444'}} title="Remover produto">🗑️</button>}
+                </div>}
+              </div>
+            </td>
             {mercados.map(m=>{
               const v=precos[p.id]?.[m]
               const best=m===mercMenor&&menor!==Infinity
@@ -39,3 +50,4 @@ export default function TabelaCotacao({produtos,precos,participantes,meuMercado,
 }
 const th={padding:'10px',textAlign:'left',borderBottom:'1px solid #e2e8f0',color:'#64748b',fontWeight:600,fontSize:'0.75rem',textTransform:'uppercase',whiteSpace:'nowrap'}
 const td={padding:'10px',borderBottom:'1px solid #e2e8f0',whiteSpace:'nowrap'}
+const iconBtn={background:'none',border:'none',color:'#3b82f6',fontSize:'0.85rem',cursor:'pointer',padding:2}

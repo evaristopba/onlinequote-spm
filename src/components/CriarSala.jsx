@@ -46,8 +46,16 @@ export default function CriarSala(){
     setMostrarCadastro(null)
     setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'',categoria:dados.categoria,codigo:dados.codigo}})
   }
+  const editar=(idx)=>{
+    const p=produtos[idx]
+    setMostrarProdutoModal({titulo:'✏️ Editar produto',inicial:{nome:p.nome,quantidade:p.quantidade,categoria:p.categoria,codigo:p.codigo},editandoIdx:idx})
+  }
   const handleConfirmarProduto=(dados)=>{
-    setProdutos(p=>[...p,dados])
+    if(mostrarProdutoModal?.editandoIdx!=null){
+      setProdutos(p=>p.map((item,i)=>i===mostrarProdutoModal.editandoIdx?{...item,...dados}:item))
+    }else{
+      setProdutos(p=>[...p,dados])
+    }
     setMostrarProdutoModal(null)
   }
   const remover=(idx)=>setProdutos(p=>p.filter((_,i)=>i!==idx))
@@ -88,7 +96,10 @@ export default function CriarSala(){
               <td style={td}><strong>{p.nome}</strong>{p.codigo&&<div style={{fontSize:'0.7rem',color:'#94a3b8'}}>Cód: {p.codigo}</div>}</td>
               <td style={td}>{p.quantidade}</td>
               <td style={td}>{p.categoria}</td>
-              <td style={{...td,textAlign:'right'}}><button onClick={()=>remover(i)} style={delBtn} title="Remover">🗑️</button></td>
+              <td style={{...td,textAlign:'right',whiteSpace:'nowrap'}}>
+                <button onClick={()=>editar(i)} style={editBtn} title="Editar">✏️</button>
+                <button onClick={()=>remover(i)} style={delBtn} title="Remover">🗑️</button>
+              </td>
             </tr>)}
           </tbody>
         </table>
@@ -106,3 +117,4 @@ const btnB={padding:'8px 14px',borderRadius:8,border:'1px solid #e2e8f0',backgro
 const th={padding:'8px 10px',textAlign:'left',borderBottom:'1px solid #e2e8f0',color:'#64748b',fontWeight:600,fontSize:'0.72rem',textTransform:'uppercase',whiteSpace:'nowrap'}
 const td={padding:'8px 10px',borderBottom:'1px solid #e2e8f0',whiteSpace:'nowrap'}
 const delBtn={background:'none',border:'none',color:'#ef4444',fontSize:'1.05rem',cursor:'pointer'}
+const editBtn={background:'none',border:'none',color:'#3b82f6',fontSize:'1.05rem',cursor:'pointer',marginRight:6}

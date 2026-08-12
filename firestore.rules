@@ -67,8 +67,18 @@ service cloud.firestore {
         && request.resource.data.nome.size() > 0
         && request.resource.data.ativo == true;
 
-      // Não permite update ou delete (protege a base)
-      allow update, delete: if false;
+      // Permite CORRIGIR um produto já cadastrado (nome, marca, categoria,
+      // quantidade, unidade, ativo/inativo) — usado pela tela de Manutenção.
+      // Não deixa trocar o código de barras nem quem cadastrou originalmente.
+      allow update: if request.auth != null
+        && request.resource.data.codigoBarras == resource.data.codigoBarras
+        && request.resource.data.cadastradoPor == resource.data.cadastradoPor
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() > 0
+        && request.resource.data.ativo is bool;
+
+      // Não permite apagar — usa o campo "ativo" pra desativar sem perder histórico
+      allow delete: if false;
     }
 
   }
