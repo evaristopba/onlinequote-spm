@@ -33,7 +33,9 @@ export default function Sala(){
     return()=>unsub()
   },[codigo])
 
-  const souCriador=sala&&auth.currentUser&&sala.criadorUid===auth.currentUser.uid
+  const souCriador=sala&&auth.currentUser&&(
+    'criadorUid'in sala?sala.criadorUid===auth.currentUser.uid:!!sala.participantes?.[auth.currentUser.uid]
+  )
   const handleExcluir=async()=>{
     if(!confirm('Excluir essa sala e todos os preços lançados? Essa ação não pode ser desfeita.'))return
     setExcluindo(true)

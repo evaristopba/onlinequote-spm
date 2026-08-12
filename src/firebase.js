@@ -178,10 +178,13 @@ export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = 
   return id
 }
 
-// Lista todas as salas criadas pelo usuário logado (pra tela "Minhas Salas")
+// Lista as salas onde o usuário logado participa (inclui salas antigas,
+// criadas antes do campo criadorUid existir — nelas, qualquer participante
+// conta como "dono" pra fins de limpeza, ja que não da pra saber quem criou)
 export const listarMinhasSalas = async () => {
   if (!db || !auth?.currentUser) throw new Error('Nao autenticado')
-  const qry = query(collection(db, 'salas'), where('criadorUid', '==', auth.currentUser.uid))
+  const uid = auth.currentUser.uid
+  const qry = query(collection(db, 'salas'), where(`participantes.${uid}.uid`, '==', uid))
   const snap = await getDocs(qry)
   return snap.docs.map((d) => ({ codigo: d.id, ...d.data() }))
 }

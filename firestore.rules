@@ -10,9 +10,13 @@ service cloud.firestore {
       // Qualquer usuário autenticado pode ler, criar e atualizar
       allow read, create, update: if request.auth != null;
 
-      // Só quem criou a sala pode excluí-la
-      allow delete: if request.auth != null
-        && resource.data.criadorUid == request.auth.uid;
+      // Quem criou a sala pode excluí-la. Salas antigas (criadas antes do
+      // campo criadorUid existir) não têm como saber quem criou — nesse
+      // caso, qualquer participante da sala pode excluí-la.
+      allow delete: if request.auth != null && (
+        ('criadorUid' in resource.data && resource.data.criadorUid == request.auth.uid)
+        || (!('criadorUid' in resource.data) && request.auth.uid in resource.data.participantes)
+      );
 
       // ============================================
       // SUBCOLEÇÃO: precos
@@ -30,11 +34,16 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/salas/$(salaId)).data.participantes[request.auth.uid].mercado
              == request.resource.data.mercado;
 
-        // Só o dono daquele mercado pode apagar o próprio preço, ou o
-        // criador da sala (usado pela limpeza em massa ao excluir a sala).
+        // Só o dono daquele mercado pode apagar o próprio preço, ou quem
+        // pode excluir a sala inteira (criador, ou qualquer participante
+        // se for uma sala antiga sem criadorUid — usado pela limpeza em massa).
         allow delete: if request.auth != null
           && (
-            get(/databases/$(database)/documents/salas/$(salaId)).data.criadorUid == request.auth.uid
+            (
+              ('criadorUid' in get(/databases/$(database)/documents/salas/$(salaId)).data)
+              ? get(/databases/$(database)/documents/salas/$(salaId)).data.criadorUid == request.auth.uid
+              : request.auth.uid in get(/databases/$(database)/documents/salas/$(salaId)).data.participantes
+            )
             || get(/databases/$(database)/documents/salas/$(salaId)).data.participantes[request.auth.uid].mercado == resource.data.mercado
           );
       }
