@@ -8,6 +8,7 @@ import ListaOtimizada from'./ListaOtimizada.jsx'
 import Participantes from'./Participantes.jsx'
 import BarcodeScanner from'./BarcodeScanner.jsx'
 import CadastrarProduto from'./CadastrarProduto.jsx'
+import ProdutoModal from'./ProdutoModal.jsx'
 export default function Sala(){
   const{codigo}=useParams()
   const nav=useNavigate()
@@ -17,6 +18,7 @@ export default function Sala(){
   const[meuNome,setMeuNome]=useState('')
   const[mostrarScanner,setMostrarScanner]=useState(false)
   const[mostrarCadastro,setMostrarCadastro]=useState(null)
+  const[mostrarProdutoModal,setMostrarProdutoModal]=useState(null)
   const[buscando,setBuscando]=useState(false)
 
   useEffect(()=>{
@@ -25,23 +27,30 @@ export default function Sala(){
   },[codigo])
 
   const handlePreco=async(pid,m,v)=>{const n=parsePreco(v);if(n===null)return;await lancarPreco(codigo,pid,m,n)}
-  const handleAddManual=async()=>{const n=prompt('Nome:');if(!n)return;const q=prompt('Quantidade:','1 unidade')||'1 unidade';await adicionarProduto(codigo,n,q)}
+  const handleAddManual=()=>{
+    setMostrarProdutoModal({titulo:'➕ Adicionar produto',inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros'}})
+  }
 
   const processarCodigo=async(cb)=>{
     setBuscando(true)
     const proprio=await buscarProdutoBasePropria(cb)
-    if(proprio){const q=prompt(`Base própria: ${proprio.nome}\nQuantidade:`,proprio.quantidade||'1 unidade')||'1 unidade';await adicionarProduto(codigo,proprio.nome,q,proprio.codigoBarras,proprio.categoria||'Outros');setBuscando(false);return}
+    if(proprio){
+      setMostrarProdutoModal({titulo:'✅ Produto encontrado na base própria',inicial:{nome:proprio.nome,quantidade:proprio.quantidade||'1 unidade',categoria:proprio.categoria||'Outros',codigo:proprio.codigoBarras}})
+      setBuscando(false);return
+    }
     const off=await buscarProdutoPorCodigo(cb)
     if(off){setMostrarCadastro({...off,codigoBarras:cb});setBuscando(false);return}
-    const n=prompt(`Código ${cb} não encontrado. Nome:`)
-    if(n){const q=prompt('Quantidade:','1 unidade')||'1 unidade';await adicionarProduto(codigo,n,q,cb)}
+    setMostrarProdutoModal({titulo:`🔎 Código ${cb} não encontrado — cadastre manualmente`,inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros',codigo:cb}})
     setBuscando(false)
   }
   const handleScan=(cb)=>{setMostrarScanner(false);processarCodigo(cb)}
-  const handleSalvoNaBase=async(dados)=>{
+  const handleSalvoNaBase=(dados)=>{
     setMostrarCadastro(null)
-    const q=prompt(`Produto: ${dados.nome}\nQuantidade:`,dados.quantidade||'1 unidade')||'1 unidade'
-    await adicionarProduto(codigo,dados.nome,q,dados.codigo,dados.categoria)
+    setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'1 unidade',categoria:dados.categoria,codigo:dados.codigo}})
+  }
+  const handleConfirmarProduto=async(dados)=>{
+    await adicionarProduto(codigo,dados.nome,dados.quantidade,dados.codigo,dados.categoria)
+    setMostrarProdutoModal(null)
   }
 
   if(naoEncontrada)return<div style={{padding:40,textAlign:'center',color:'#64748b'}}><p>❌ Sala <strong>#{codigo}</strong> não encontrada.</p><button onClick={()=>nav('/entrar')} style={{marginTop:12,padding:'10px 20px',borderRadius:8,border:'none',background:'#3b82f6',color:'white',fontWeight:700}}>Voltar</button></div>
@@ -68,6 +77,7 @@ export default function Sala(){
     <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     {mostrarScanner&&<BarcodeScanner onScan={handleScan} onClose={()=>setMostrarScanner(false)}/>}
     {mostrarCadastro&&<CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={()=>setMostrarCadastro(null)}/>}
+    {mostrarProdutoModal&&<ProdutoModal titulo={mostrarProdutoModal.titulo} inicial={mostrarProdutoModal.inicial} onConfirmar={handleConfirmarProduto} onCancelar={()=>setMostrarProdutoModal(null)}/>}
   </div>
 }
 const btnY={padding:'8px 14px',borderRadius:8,border:'none',background:'#f59e0b',color:'white',fontWeight:600,fontSize:'0.85rem'}

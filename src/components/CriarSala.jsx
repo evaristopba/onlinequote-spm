@@ -4,6 +4,7 @@ import{criarSala,buscarProdutoBasePropria}from'../firebase.js'
 import{buscarProdutoPorCodigo}from'../utils/barcode.js'
 import BarcodeScanner from'./BarcodeScanner.jsx'
 import CadastrarProduto from'./CadastrarProduto.jsx'
+import ProdutoModal from'./ProdutoModal.jsx'
 export default function CriarSala(){
   const nav=useNavigate()
   const[nome,setNome]=useState('')
@@ -12,18 +13,20 @@ export default function CriarSala(){
   const[produtos,setProdutos]=useState([])
   const[mostrarScanner,setMostrarScanner]=useState(false)
   const[mostrarCadastro,setMostrarCadastro]=useState(null)
+  const[mostrarProdutoModal,setMostrarProdutoModal]=useState(null)
   const[carregando,setCarregando]=useState(false)
   const[buscando,setBuscando]=useState(false)
 
-  const addManual=()=>{const n=prompt('Nome:');if(!n)return;const q=prompt('Quantidade:','1 unidade')||'1 unidade';setProdutos(p=>[...p,{nome:n,quantidade:q,categoria:'Outros'}])}
+  const addManual=()=>{
+    setMostrarProdutoModal({titulo:'➕ Adicionar produto',inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros'}})
+  }
 
   const processarCodigo=async(codigo)=>{
     setBuscando(true)
     // 1. Busca na base própria
     const proprio=await buscarProdutoBasePropria(codigo)
     if(proprio){
-      const q=prompt(`Produto (base própria): ${proprio.nome}\nQuantidade:`,proprio.quantidade||'1 unidade')||'1 unidade'
-      setProdutos(p=>[...p,{nome:proprio.nome,quantidade:q,codigo:proprio.codigoBarras,categoria:proprio.categoria||'Outros'}])
+      setMostrarProdutoModal({titulo:'✅ Produto encontrado na base própria',inicial:{nome:proprio.nome,quantidade:proprio.quantidade||'1 unidade',categoria:proprio.categoria||'Outros',codigo:proprio.codigoBarras}})
       setBuscando(false);return
     }
     // 2. Busca na Open Food Facts
@@ -34,16 +37,18 @@ export default function CriarSala(){
       setBuscando(false);return
     }
     // 3. Manual
-    const n=prompt(`Código ${codigo} não encontrado. Nome do produto:`)
-    if(n){const q=prompt('Quantidade:','1 unidade')||'1 unidade';setProdutos(p=>[...p,{nome:n,quantidade:q,codigo,categoria:'Outros'}])}
+    setMostrarProdutoModal({titulo:`🔎 Código ${codigo} não encontrado — cadastre manualmente`,inicial:{nome:'',quantidade:'1 unidade',categoria:'Outros',codigo}})
     setBuscando(false)
   }
 
   const handleScan=(codigo)=>{setMostrarScanner(false);processarCodigo(codigo)}
   const handleSalvoNaBase=(dados)=>{
     setMostrarCadastro(null)
-    const q=prompt(`Produto: ${dados.nome}\nQuantidade:`,dados.quantidade||'1 unidade')||'1 unidade'
-    setProdutos(p=>[...p,{nome:dados.nome,quantidade:q,codigo:dados.codigo,categoria:dados.categoria}])
+    setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'1 unidade',categoria:dados.categoria,codigo:dados.codigo}})
+  }
+  const handleConfirmarProduto=(dados)=>{
+    setProdutos(p=>[...p,dados])
+    setMostrarProdutoModal(null)
   }
   const remover=(idx)=>setProdutos(p=>p.filter((_,i)=>i!==idx))
   const handleCriar=async()=>{
@@ -53,7 +58,7 @@ export default function CriarSala(){
     try{const c=await criarSala(nomeSala||'Cotação',produtos,nome,mercado);nav(`/sala/${c}`)}
     catch(e){alert('Erro: '+e.message);setCarregando(false)}
   }
-  return<div style={{maxWidth:520,margin:'0 auto',padding:'24px 16px'}}>
+  return<div style={{maxWidth:560,margin:'0 auto',padding:'24px 16px'}}>
     <h2 style={{marginBottom:20}}>➕ Criar Cotação</h2>
     <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:20}}>
       <input placeholder="Seu nome" value={nome} onChange={e=>setNome(e.target.value)} style={inp}/>
@@ -61,7 +66,7 @@ export default function CriarSala(){
       <input placeholder="Nome da cotação (opcional)" value={nomeSala} onChange={e=>setNomeSala(e.target.value)} style={inp}/>
     </div>
     <div style={{background:'white',borderRadius:12,padding:16,marginBottom:16,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap',gap:8}}>
         <h3 style={{margin:0,fontSize:'1rem'}}>📦 Produtos ({produtos.length})</h3>
         <div style={{display:'flex',gap:8}}>
           <button onClick={()=>setMostrarScanner(true)} style={btnA}>📷 Escanear</button>
@@ -69,18 +74,35 @@ export default function CriarSala(){
         </div>
       </div>
       {buscando&&<p style={{color:'#64748b',fontSize:'0.85rem',textAlign:'center'}}>🔍 Buscando...</p>}
-      {produtos.length===0?<p style={{color:'#94a3b8',textAlign:'center',fontSize:'0.9rem',padding:'10px 0'}}>Nenhum produto. Escaneie ou adicione manualmente.</p>:<div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {produtos.map((p,i)=><div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 12px',background:'#f8fafc',borderRadius:8}}>
-          <div><strong style={{fontSize:'0.9rem'}}>{p.nome}</strong><div style={{fontSize:'0.78rem',color:'#64748b'}}>{p.quantidade}{p.categoria&&` · ${p.categoria}`}{p.codigo&&` · Cód: ${p.codigo}`}</div></div>
-          <button onClick={()=>remover(i)} style={{background:'none',border:'none',color:'#ef4444',fontSize:'1.1rem',cursor:'pointer'}}>🗑️</button>
-        </div>)}
+      {produtos.length===0?<p style={{color:'#94a3b8',textAlign:'center',fontSize:'0.9rem',padding:'10px 0'}}>Nenhum produto. Escaneie ou adicione manualmente.</p>:
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.85rem'}}>
+          <thead><tr>
+            <th style={th}>Produto</th>
+            <th style={th}>Quantidade</th>
+            <th style={th}>Categoria</th>
+            <th style={{...th,width:36}}></th>
+          </tr></thead>
+          <tbody>
+            {produtos.map((p,i)=><tr key={i}>
+              <td style={td}><strong>{p.nome}</strong>{p.codigo&&<div style={{fontSize:'0.7rem',color:'#94a3b8'}}>Cód: {p.codigo}</div>}</td>
+              <td style={td}>{p.quantidade}</td>
+              <td style={td}>{p.categoria}</td>
+              <td style={{...td,textAlign:'right'}}><button onClick={()=>remover(i)} style={delBtn} title="Remover">🗑️</button></td>
+            </tr>)}
+          </tbody>
+        </table>
       </div>}
     </div>
     <button onClick={handleCriar} disabled={carregando} style={{width:'100%',padding:'14px',borderRadius:10,border:'none',background:'#10b981',color:'white',fontWeight:700,fontSize:'1rem',opacity:carregando?0.6:1}}>{carregando?'Criando...':'🚀 Criar Sala'}</button>
     {mostrarScanner&&<BarcodeScanner onScan={handleScan} onClose={()=>setMostrarScanner(false)}/>}
     {mostrarCadastro&&<CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={()=>setMostrarCadastro(null)}/>}
+    {mostrarProdutoModal&&<ProdutoModal titulo={mostrarProdutoModal.titulo} inicial={mostrarProdutoModal.inicial} onConfirmar={handleConfirmarProduto} onCancelar={()=>setMostrarProdutoModal(null)}/>}
   </div>
 }
-const inp={padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',outline:'none',width:'100%'}
+const inp={padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',outline:'none',width:'100%',boxSizing:'border-box'}
 const btnA={padding:'8px 14px',borderRadius:8,border:'none',background:'#f59e0b',color:'white',fontWeight:600,fontSize:'0.85rem'}
 const btnB={padding:'8px 14px',borderRadius:8,border:'1px solid #e2e8f0',background:'white',color:'#1e293b',fontWeight:600,fontSize:'0.85rem'}
+const th={padding:'8px 10px',textAlign:'left',borderBottom:'1px solid #e2e8f0',color:'#64748b',fontWeight:600,fontSize:'0.72rem',textTransform:'uppercase',whiteSpace:'nowrap'}
+const td={padding:'8px 10px',borderBottom:'1px solid #e2e8f0',whiteSpace:'nowrap'}
+const delBtn={background:'none',border:'none',color:'#ef4444',fontSize:'1.05rem',cursor:'pointer'}
