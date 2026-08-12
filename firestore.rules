@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // COLEÇÃO: salas
+    // Cada documento = uma sala de cotação
+    // ============================================
+    match /salas/{salaId} {
+      // Qualquer usuário autenticado pode ler e escrever
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================
+    // COLEÇÃO: produtos
+    // Base própria de produtos cadastrados
+    // ============================================
+    match /produtos/{produtoId} {
+      // Qualquer usuário autenticado pode consultar
+      allow read: if request.auth != null;
+
+      // Qualquer usuário autenticado pode CRIAR um produto novo
+      // Não permite editar ou apagar produtos já cadastrados
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['codigoBarras', 'nome', 'ativo', 'cadastradoEm'])
+        && request.resource.data.codigoBarras is string
+        && request.resource.data.codigoBarras.size() >= 8
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() > 0
+        && request.resource.data.ativo == true;
+
+      // Não permite update ou delete (protege a base)
+      allow update, delete: if false;
+    }
+
+  }
+}

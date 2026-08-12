@@ -1,23 +1,28 @@
 # 🛒 Cotação Online
 
-App PWA de cotação de preços entre supermercados em grupo, usando React + Firebase + Vercel.
+App PWA de cotação de preços entre supermercados em grupo, com scanner de código de barras e base de dados própria híbrida.
+**Stack:** React + Vite + Firebase + Vercel · **Região:** pt-BR
+
+---
 
 ## 🚀 Setup
 
-1. **Clone e instale:**
+### 1. Instalar dependências
 ```bash
-git clone <seu-repo>
-cd cotacao-online
 npm install
 ```
 
-2. **Configure o Firebase:**
-- Vá em [console.firebase.google.com](https://console.firebase.google.com)
+### 2. Criar projeto Firebase
+- Acesse [console.firebase.google.com](https://console.firebase.google.com)
 - Crie um projeto novo
-- Ative **Authentication** (modo Anônimo) e **Firestore Database**
-- Em Configurações do projeto > Seus apps > Web, copie as credenciais
-- Crie um arquivo `.env` na raiz com:
-```
+- **IMPORTANTE:** Ao criar o Firestore, escolha a região **`southamerica-east1` (São Paulo)**
+- Ative **Authentication** → método **Anônimo**
+- Ative **Firestore Database**
+
+### 3. Pegar credenciais
+Crie o arquivo `.env` na raiz:
+
+```env
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
 VITE_FIREBASE_PROJECT_ID=...
@@ -26,42 +31,78 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 ```
 
-3. **Regras do Firestore** (Firebase Console > Firestore > Regras):
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /salas/{sala} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+### 4. Configurar Regras do Firestore
 
-> ⚠️ **Nota de segurança:** a regra acima permite que qualquer usuário autenticado (mesmo anônimo) leia e escreva em **qualquer** sala, não só nas que participa. Para um app entre amigos via link isso costuma ser aceitável, mas se quiser mais rigor, restrinja a escrita a quem já é participante da sala, algo como:
-> ```
-> allow read: if request.auth != null;
-> allow write: if request.auth != null &&
->   (resource == null || resource.data.participantes[request.auth.uid] != null ||
->    request.resource.data.participantes[request.auth.uid] != null);
-> ```
+As regras de segurança estão no arquivo **`firestore.rules`** na raiz do projeto.
 
-4. **Rode local:**
+**Como aplicar:**
+
+1. Acesse [console.firebase.google.com](https://console.firebase.google.com)
+2. Vá em **Firestore Database** → aba **Regras**
+3. Copie o conteúdo do arquivo `firestore.rules`
+4. Cole no editor de regras do Firebase
+5. Clique em **Publicar**
+
+**O que as regras fazem:**
+
+| Coleção | Read | Create | Update | Delete |
+|---|---|---|---|---|
+| `salas` | ✅ Autenticado | ✅ Autenticado | ✅ Autenticado | ✅ Autenticado |
+| `produtos` | ✅ Autenticado | ✅ Autenticado (com validação) | ❌ Não permitido | ❌ Não permitido |
+
+> **Por que produtos não pode editar/apagar?** Para proteger a base própria. Uma vez cadastrado, o produto fica disponível para todos. Se precisar corrigir, faça direto no Firebase Console.
+
+### 5. Rodar local
 ```bash
 npm run dev
 ```
 
-5. **Deploy no Vercel:**
+### 6. Deploy no Vercel
 ```bash
 npm i -g vercel
 vercel --prod
 ```
-Ou conecte o repositório GitHub na dashboard do Vercel.
 
-## 📱 Como usar
+---
 
-1. Uma pessoa cria a cotação → recebe código tipo `#X7K9P2`
-2. Compartilha no WhatsApp
-3. Os outros entram com o código
-4. Cada um lança preços no mercado que visitou
-5. A lista otimizada aparece automaticamente para todos
+## 📷 Scanner — Fluxo Híbrido
+
+1. **Base Própria** (Firestore) → produtos já cadastrados
+2. **Open Food Facts** (API online) → base mundial
+3. **Manual** → usuário digita
+
+Quando encontra na Open Food Facts, pergunta se quer salvar na base própria.
+
+---
+
+## 🎮 Como usar
+
+1. **Criar:** escaneia/adiciona produtos → código `#X7K9P2`
+2. **Compartilhar:** manda no WhatsApp
+3. **Entrar:** código + nome + mercado
+4. **Lançar preços**
+5. **Resultado:** lista por mercado **e por categoria**
+
+---
+
+## 📁 Estrutura
+
+```
+src/
+├── main.jsx
+├── App.jsx
+├── firebase.js           # + base própria de produtos
+├── index.css
+├── utils/
+│   ├── ptBR.js
+│   └── barcode.js
+└── components/
+    ├── CriarSala.jsx     # Busca híbrida
+    ├── EntrarSala.jsx
+    ├── Sala.jsx          # Busca híbrida
+    ├── TabelaCotacao.jsx
+    ├── ListaOtimizada.jsx # + agrupamento por categoria
+    ├── Participantes.jsx
+    ├── BarcodeScanner.jsx
+    └── CadastrarProduto.jsx  # Modal para salvar na base
+```

@@ -1,8 +1,11 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInAnonymously } from 'firebase/auth'
-import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, arrayUnion, arrayRemove } from 'firebase/firestore'
+import {
+  getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot,
+  arrayUnion, collection, query, where, getDocs, addDoc
+} from 'firebase/firestore'
 
-const firebaseConfig = {
+const cfg = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -11,45 +14,76 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-const configFaltando = Object.entries(firebaseConfig).filter(([, v]) => !v).map(([k]) => k)
-if (configFaltando.length > 0) {
-  console.error(
-    `Configuração do Firebase incompleta. Variáveis ausentes: ${configFaltando.join(', ')}. ` +
-    'Crie um arquivo .env na raiz do projeto (veja .env.example).'
-  )
+const miss = Object.entries(cfg).filter(([, v]) => !v).map(([k]) => k)
+
+let app, auth, db
+
+if (miss.length > 0) {
+  console.error('Firebase config incompleta. Variaveis ausentes:', miss.join(', '))
+  console.error('Verifique se o arquivo .env existe na raiz do projeto e se o servidor foi reiniciado.')
+  app = null
+  auth = null
+  db = null
+} else {
+  app = initializeApp(cfg)
+  auth = getAuth(app)
+  db = getFirestore(app)
 }
 
-const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
-export const db = getFirestore(app)
+export { auth, db }
 
-// Login anonimo automatico
-export const loginAnonimo = () => signInAnonymously(auth)
+export const loginAnonimo = () => {
+  if (!auth) return Promise.reject(new Error('Firebase nao inicializado. Verifique o arquivo .env.'))
+  return signInAnonymously(auth)
+}
 
-// Gerar codigo de sala aleatorio
 export const gerarCodigo = () => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase()
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let r = ''
+  for (let i = 0; i < 6; i++) r += c[Math.floor(Math.random() * c.length)]
+  return r
 }
 
-// Criar sala no Firestore
-// Gera um código único (verifica colisão antes de gravar, já que gerarCodigo() é aleatório)
-export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado) => {
-  const user = auth.currentUser
-  if (!user) throw new Error('Usuário não autenticado')
+// ===== BASE PROPRIA DE PRODUTOS =====
+export const buscarProdutoBasePropria = async (codigoBarras) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  const qry = query(collection(db, 'produtos'), where('codigoBarras', '==', codigoBarras), where('ativo', '==', true))
+  const snap = await getDocs(qry)
+  if (snap.empty) return null
+  const d = snap.docs[0].data()
+  return { id: snap.docs[0].id, ...d }
+}
 
-  let codigo, salaRef, snap
-  let tentativas = 0
+export const salvarProdutoBasePropria = async (dados) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  const docRef = await addDoc(collection(db, 'produtos'), {
+    codigoBarras: dados.codigoBarras,
+    nome: dados.nome,
+    marca: dados.marca || '',
+    categoria: dados.categoria || 'Outros',
+    quantidade: dados.quantidade || '',
+    unidade: dados.unidade || '',
+    imagem: dados.imagem || null,
+    ativo: true,
+    cadastradoEm: new Date().toISOString(),
+    cadastradoPor: auth?.currentUser?.uid || null,
+  })
+  return docRef.id
+}
+
+// ===== SALAS =====
+export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado) => {
+  if (!db || !auth) throw new Error('Firebase nao inicializado')
+  const user = auth.currentUser
+  if (!user) throw new Error('Nao autenticado')
+  let codigo, salaRef, snap, tentativas = 0
   do {
     codigo = gerarCodigo()
     salaRef = doc(db, 'salas', codigo)
     snap = await getDoc(salaRef)
     tentativas++
   } while (snap.exists() && tentativas < 5)
-
-  if (snap.exists()) {
-    throw new Error('Não foi possível gerar um código de sala único. Tente novamente.')
-  }
-
+  if (snap.exists()) throw new Error('Codigo indisponivel. Tente novamente.')
   const participantes = {}
   participantes[user.uid] = {
     nome: criadorNome,
@@ -57,62 +91,61 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
     uid: user.uid,
     entrouEm: new Date().toISOString(),
   }
-
   await setDoc(salaRef, {
-    nome: nomeSala,
+    nome: nomeSala || 'Cotacao',
     criadoEm: new Date().toISOString(),
     ativa: true,
-    produtos: produtos.map((p, i) => ({ id: `p${i}`, nome: p.nome, quantidade: p.quantidade })),
+    produtos: produtos.map((p, i) => ({
+      id: `p${i}`,
+      nome: p.nome,
+      quantidade: p.quantidade || '1 un',
+      codigo: p.codigo || null,
+      categoria: p.categoria || 'Outros',
+    })),
     participantes,
     precos: {},
   })
-
   return codigo
 }
 
-// Entrar em sala existente
 export const entrarSala = async (codigo, nome, mercado) => {
+  if (!db || !auth) throw new Error('Firebase nao inicializado')
   const user = auth.currentUser
   const salaRef = doc(db, 'salas', codigo)
   const snap = await getDoc(salaRef)
-
-  if (!snap.exists()) throw new Error('Sala nao encontrada')
-
+  if (!snap.exists()) throw new Error('Sala nao encontrada.')
   await updateDoc(salaRef, {
     [`participantes.${user.uid}`]: {
       nome,
       mercado,
       uid: user.uid,
       entrouEm: new Date().toISOString(),
-    }
+    },
   })
-
   return snap.data()
 }
 
-// Escutar sala em tempo real
-// callback recebe os dados da sala, ou null se a sala não existir (ex: código inválido)
-export const escutarSala = (codigo, callback) => {
-  const salaRef = doc(db, 'salas', codigo)
-  return onSnapshot(salaRef, (snap) => {
-    callback(snap.exists() ? snap.data() : null)
-  })
+export const escutarSala = (codigo, cb) => {
+  if (!db) {
+    console.error('Firebase nao inicializado')
+    return () => {}
+  }
+  const ref = doc(db, 'salas', codigo)
+  return onSnapshot(ref, (s) => cb(s.exists() ? s.data() : null))
 }
 
-// Lancar preco
 export const lancarPreco = async (codigo, produtoId, mercado, preco) => {
-  const salaRef = doc(db, 'salas', codigo)
-  await updateDoc(salaRef, {
+  if (!db) throw new Error('Firebase nao inicializado')
+  await updateDoc(doc(db, 'salas', codigo), {
     [`precos.${produtoId}.${mercado}`]: parseFloat(preco),
   })
 }
 
-// Adicionar produto
-export const adicionarProduto = async (codigo, nome, quantidade) => {
-  const salaRef = doc(db, 'salas', codigo)
+export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = null, categoria = 'Outros') => {
+  if (!db) throw new Error('Firebase nao inicializado')
   const id = `p${Date.now()}`
-  await updateDoc(salaRef, {
-    produtos: arrayUnion({ id, nome, quantidade })
+  await updateDoc(doc(db, 'salas', codigo), {
+    produtos: arrayUnion({ id, nome, quantidade: quantidade || '1 un', codigo: codigoBarras, categoria }),
   })
   return id
 }
