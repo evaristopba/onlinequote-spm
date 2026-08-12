@@ -1,21 +1,24 @@
 import{useState}from'react'
-import{formatarQuantidade,parseQuantidadeExistente}from'../utils/ptBR.js'
+import{formatarQuantidade,parseQuantidadeExistente,formatarInputPreco,parsePreco}from'../utils/ptBR.js'
 const CATEGORIAS=['Alimentos','Bebidas','Limpeza','Higiene','Frios e Laticínios','Padaria','Açougue','Outros']
-export default function ProdutoModal({titulo,inicial,onConfirmar,onCancelar}){
+export default function ProdutoModal({titulo,inicial,meuMercado,onConfirmar,onCancelar}){
   const qtdInicial=parseQuantidadeExistente(inicial?.quantidade)
   const[nome,setNome]=useState(inicial?.nome||'')
   const[valorQtd,setValorQtd]=useState(qtdInicial.valor)
   const[unidadeQtd,setUnidadeQtd]=useState(qtdInicial.unidade)
   const[categoria,setCategoria]=useState(inicial?.categoria||'Outros')
+  const[preco,setPreco]=useState(inicial?.preco?formatarInputPreco(inicial.preco):'')
   const[salvando,setSalvando]=useState(false)
 
   const handleConfirmar=async()=>{
     if(!nome.trim())return
     const v=parseFloat(String(valorQtd).replace(',','.'))
     if(isNaN(v)||v<=0)return alert('Quantidade precisa ser um número maior que zero')
+    const precoNum=preco.trim()?parsePreco(preco):null
+    if(preco.trim()&&precoNum===null)return alert('Preço inválido')
     setSalvando(true)
     try{
-      await onConfirmar({nome:nome.trim(),quantidade:formatarQuantidade(v,unidadeQtd.trim()||'un'),categoria,codigo:inicial?.codigo||null})
+      await onConfirmar({nome:nome.trim(),quantidade:formatarQuantidade(v,unidadeQtd.trim()||'un'),categoria,codigo:inicial?.codigo||null,preco:precoNum})
     }catch(e){
       alert('Erro ao adicionar produto: '+e.message)
       setSalvando(false)
@@ -48,6 +51,10 @@ export default function ProdutoModal({titulo,inicial,onConfirmar,onCancelar}){
           </div>
         </div>
         <div style={{fontSize:'0.75rem',color:'#94a3b8'}}>Prévia: {formatarQuantidade(valorQtd,unidadeQtd)}</div>
+        {meuMercado&&<div>
+          <label style={label}>Seu preço em {meuMercado} (opcional — dá pra lançar depois também)</label>
+          <input inputMode="decimal" value={preco} onChange={e=>setPreco(e.target.value)} onKeyDown={handleKeyDown} style={inp} placeholder="0,00"/>
+        </div>}
         {inicial?.codigo&&<div style={{fontSize:'0.78rem',color:'#94a3b8'}}>📷 Código de barras: {inicial.codigo}</div>}
       </div>
       <div style={{display:'flex',gap:10,marginTop:20}}>

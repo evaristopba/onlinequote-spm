@@ -66,15 +66,19 @@ export default function Sala(){
     setMostrarProdutoModal({titulo:'Confirmar produto',inicial:{nome:dados.nome,quantidade:dados.quantidade||'',categoria:dados.categoria,codigo:dados.codigo}})
   }
   const handleConfirmarProduto=async(dados)=>{
-    if(mostrarProdutoModal?.editandoProdutoId){
-      await editarProduto(codigo,mostrarProdutoModal.editandoProdutoId,dados)
+    let produtoId=mostrarProdutoModal?.editandoProdutoId
+    if(produtoId){
+      await editarProduto(codigo,produtoId,dados)
     }else{
-      await adicionarProduto(codigo,dados.nome,dados.quantidade,dados.codigo,dados.categoria)
+      produtoId=await adicionarProduto(codigo,dados.nome,dados.quantidade,dados.codigo,dados.categoria)
+    }
+    if(dados.preco!=null&&meuMercado){
+      await lancarPreco(codigo,produtoId,meuMercado,dados.preco)
     }
     setMostrarProdutoModal(null)
   }
   const handleEditarProduto=(p)=>{
-    setMostrarProdutoModal({titulo:'✏️ Editar produto',inicial:{nome:p.nome,quantidade:p.quantidade,categoria:p.categoria,codigo:p.codigo},editandoProdutoId:p.id})
+    setMostrarProdutoModal({titulo:'✏️ Editar produto',inicial:{nome:p.nome,quantidade:p.quantidade,categoria:p.categoria,codigo:p.codigo,preco:precos[p.id]?.[meuMercado]},editandoProdutoId:p.id})
   }
   const handleRemoverProduto=async(p)=>{
     if(!confirm(`Remover "${p.nome}" da cotação? Os preços já lançados desse produto também somem.`))return
@@ -110,7 +114,7 @@ export default function Sala(){
     <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     {mostrarScanner&&<BarcodeScanner onScan={handleScan} onClose={()=>setMostrarScanner(false)}/>}
     {mostrarCadastro&&<CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={()=>setMostrarCadastro(null)}/>}
-    {mostrarProdutoModal&&<ProdutoModal titulo={mostrarProdutoModal.titulo} inicial={mostrarProdutoModal.inicial} onConfirmar={handleConfirmarProduto} onCancelar={()=>setMostrarProdutoModal(null)}/>}
+    {mostrarProdutoModal&&<ProdutoModal titulo={mostrarProdutoModal.titulo} inicial={mostrarProdutoModal.inicial} meuMercado={meuMercado} onConfirmar={handleConfirmarProduto} onCancelar={()=>setMostrarProdutoModal(null)}/>}
   </div>
 }
 const btnY={padding:'8px 14px',borderRadius:8,border:'none',background:'#f59e0b',color:'white',fontWeight:600,fontSize:'0.85rem'}
