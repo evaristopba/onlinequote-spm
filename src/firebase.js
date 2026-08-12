@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInAnonymously } from 'firebase/auth'
 import {
-  getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot,
+  getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
   arrayUnion, collection, query, where, getDocs, addDoc
 } from 'firebase/firestore'
 
@@ -95,6 +95,7 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
     nome: nomeSala || 'Cotacao',
     criadoEm: new Date().toISOString(),
     ativa: true,
+    criadorUid: user.uid,
     produtos: produtos.map((p, i) => ({
       id: `p${i}`,
       nome: p.nome,
@@ -103,7 +104,6 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
       categoria: p.categoria || 'Outros',
     })),
     participantes,
-    precos: {},
   })
   return codigo
 }
@@ -136,9 +136,37 @@ export const escutarSala = (codigo, cb) => {
 
 export const lancarPreco = async (codigo, produtoId, mercado, preco) => {
   if (!db) throw new Error('Firebase nao inicializado')
-  await updateDoc(doc(db, 'salas', codigo), {
-    [`precos.${produtoId}.${mercado}`]: parseFloat(preco),
+  const precoId = `${produtoId}__${sanitizarId(mercado)}`
+  await setDoc(doc(db, 'salas', codigo, 'precos', precoId), {
+    produtoId,
+    mercado,
+    preco: parseFloat(preco),
+    atualizadoPor: auth?.currentUser?.uid || null,
+    atualizadoEm: new Date().toISOString(),
   })
+}
+
+// Escuta a subcoleção de precos e monta o mesmo formato { produtoId: { mercado: preco } }
+// que os componentes de tela ja esperam, entao nenhum componente precisa mudar.
+export const escutarPrecos = (codigo, cb) => {
+  if (!db) {
+    console.error('Firebase nao inicializado')
+    return () => {}
+  }
+  const ref = collection(db, 'salas', codigo, 'precos')
+  return onSnapshot(ref, (snap) => {
+    const precos = {}
+    snap.forEach((docSnap) => {
+      const d = docSnap.data()
+      if (!precos[d.produtoId]) precos[d.produtoId] = {}
+      precos[d.produtoId][d.mercado] = d.preco
+    })
+    cb(precos)
+  })
+}
+
+function sanitizarId(s) {
+  return String(s).trim().replace(/\//g, '_') || 'mercado'
 }
 
 export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = null, categoria = 'Outros') => {
@@ -148,4 +176,22 @@ export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = 
     produtos: arrayUnion({ id, nome, quantidade: quantidade || '1 un', codigo: codigoBarras, categoria }),
   })
   return id
+}
+
+// Lista todas as salas criadas pelo usuário logado (pra tela "Minhas Salas")
+export const listarMinhasSalas = async () => {
+  if (!db || !auth?.currentUser) throw new Error('Nao autenticado')
+  const qry = query(collection(db, 'salas'), where('criadorUid', '==', auth.currentUser.uid))
+  const snap = await getDocs(qry)
+  return snap.docs.map((d) => ({ codigo: d.id, ...d.data() }))
+}
+
+// Exclui a sala inteira. Precisa apagar a subcolecao de precos manualmente,
+// pois o Firestore nao remove subcolecoes junto com o documento pai.
+export const excluirSala = async (codigo) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  const precosRef = collection(db, 'salas', codigo, 'precos')
+  const snap = await getDocs(precosRef)
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
+  await deleteDoc(doc(db, 'salas', codigo))
 }

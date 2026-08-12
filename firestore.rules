@@ -7,8 +7,37 @@ service cloud.firestore {
     // Cada documento = uma sala de cotação
     // ============================================
     match /salas/{salaId} {
-      // Qualquer usuário autenticado pode ler e escrever
-      allow read, write: if request.auth != null;
+      // Qualquer usuário autenticado pode ler, criar e atualizar
+      allow read, create, update: if request.auth != null;
+
+      // Só quem criou a sala pode excluí-la
+      allow delete: if request.auth != null
+        && resource.data.criadorUid == request.auth.uid;
+
+      // ============================================
+      // SUBCOLEÇÃO: precos
+      // Cada preço é um documento próprio: { produtoId, mercado, preco, ... }
+      // Só quem está registrado naquele mercado pode gravar o preço dele.
+      // ============================================
+      match /precos/{precoId} {
+        allow read: if request.auth != null;
+
+        allow create, update: if request.auth != null
+          && request.resource.data.produtoId is string
+          && request.resource.data.mercado is string
+          && request.resource.data.preco is number
+          && request.resource.data.preco > 0
+          && get(/databases/$(database)/documents/salas/$(salaId)).data.participantes[request.auth.uid].mercado
+             == request.resource.data.mercado;
+
+        // Só o dono daquele mercado pode apagar o próprio preço, ou o
+        // criador da sala (usado pela limpeza em massa ao excluir a sala).
+        allow delete: if request.auth != null
+          && (
+            get(/databases/$(database)/documents/salas/$(salaId)).data.criadorUid == request.auth.uid
+            || get(/databases/$(database)/documents/salas/$(salaId)).data.participantes[request.auth.uid].mercado == resource.data.mercado
+          );
+      }
     }
 
     // ============================================

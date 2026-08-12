@@ -1,6 +1,6 @@
 import{useEffect,useState}from'react'
 import{useParams,useNavigate}from'react-router-dom'
-import{escutarSala,lancarPreco,adicionarProduto,auth,buscarProdutoBasePropria}from'../firebase.js'
+import{escutarSala,escutarPrecos,lancarPreco,adicionarProduto,excluirSala,auth,buscarProdutoBasePropria}from'../firebase.js'
 import{parsePreco,formatarDataRelativa}from'../utils/ptBR.js'
 import{buscarProdutoPorCodigo}from'../utils/barcode.js'
 import TabelaCotacao from'./TabelaCotacao.jsx'
@@ -13,6 +13,7 @@ export default function Sala(){
   const{codigo}=useParams()
   const nav=useNavigate()
   const[sala,setSala]=useState(null)
+  const[precos,setPrecos]=useState({})
   const[naoEncontrada,setNaoEncontrada]=useState(false)
   const[meuMercado,setMeuMercado]=useState('')
   const[meuNome,setMeuNome]=useState('')
@@ -20,11 +21,25 @@ export default function Sala(){
   const[mostrarCadastro,setMostrarCadastro]=useState(null)
   const[mostrarProdutoModal,setMostrarProdutoModal]=useState(null)
   const[buscando,setBuscando]=useState(false)
+  const[excluindo,setExcluindo]=useState(false)
 
   useEffect(()=>{
     const unsub=escutarSala(codigo,(d)=>{if(!d){setNaoEncontrada(true);setSala(null);return}setNaoEncontrada(false);setSala(d);const u=auth.currentUser?.uid;if(u&&d.participantes[u]){setMeuMercado(d.participantes[u].mercado);setMeuNome(d.participantes[u].nome)}})
     return()=>unsub()
   },[codigo])
+
+  useEffect(()=>{
+    const unsub=escutarPrecos(codigo,setPrecos)
+    return()=>unsub()
+  },[codigo])
+
+  const souCriador=sala&&auth.currentUser&&sala.criadorUid===auth.currentUser.uid
+  const handleExcluir=async()=>{
+    if(!confirm('Excluir essa sala e todos os preços lançados? Essa ação não pode ser desfeita.'))return
+    setExcluindo(true)
+    try{await excluirSala(codigo);nav('/')}
+    catch(e){alert('Erro ao excluir: '+e.message);setExcluindo(false)}
+  }
 
   const handlePreco=async(pid,m,v)=>{const n=parsePreco(v);if(n===null)return;await lancarPreco(codigo,pid,m,n)}
   const handleAddManual=()=>{
@@ -59,7 +74,11 @@ export default function Sala(){
   return<div style={{maxWidth:960,margin:'0 auto',padding:'16px'}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginBottom:16}}>
       <div><div style={{fontSize:'0.8rem',color:'#64748b'}}>Sala · Criada {formatarDataRelativa(sala.criadoEm)}</div><div style={{fontFamily:'monospace',fontSize:'1.5rem',fontWeight:700,color:'#f59e0b',letterSpacing:3}}>#{codigo}</div></div>
-      <div style={{textAlign:'right'}}><div style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.85rem',color:'#10b981',fontWeight:600}}><span style={{width:8,height:8,background:'#10b981',borderRadius:'50%',display:'inline-block',animation:'pulse 1.5s infinite'}}></span>AO VIVO</div><div style={{fontSize:'0.78rem',color:'#94a3b8',marginTop:2}}>Você: <strong>{meuNome}</strong> · Mercado: <strong>{meuMercado}</strong></div></div>
+      <div style={{textAlign:'right'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6,fontSize:'0.85rem',color:'#10b981',fontWeight:600,justifyContent:'flex-end'}}><span style={{width:8,height:8,background:'#10b981',borderRadius:'50%',display:'inline-block',animation:'pulse 1.5s infinite'}}></span>AO VIVO</div>
+        <div style={{fontSize:'0.78rem',color:'#94a3b8',marginTop:2}}>Você: <strong>{meuNome}</strong> · Mercado: <strong>{meuMercado}</strong></div>
+        {souCriador&&<button onClick={handleExcluir} disabled={excluindo} style={{marginTop:6,padding:'5px 10px',borderRadius:6,border:'1px solid #fca5a5',background:'white',color:'#ef4444',fontSize:'0.75rem',fontWeight:600}}>{excluindo?'Excluindo...':'🗑️ Encerrar sala'}</button>}
+      </div>
     </div>
     <Participantes participantes={sala.participantes}/>
     <div style={{background:'white',borderRadius:12,padding:18,marginBottom:16,boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}>
@@ -71,9 +90,9 @@ export default function Sala(){
           <button onClick={handleAddManual} style={btnW}>➕ Manual</button>
         </div>
       </div>
-      <TabelaCotacao produtos={sala.produtos} precos={sala.precos||{}} participantes={sala.participantes} meuMercado={meuMercado} onPrecoChange={handlePreco}/>
+      <TabelaCotacao produtos={sala.produtos} precos={precos} participantes={sala.participantes} meuMercado={meuMercado} onPrecoChange={handlePreco}/>
     </div>
-    <ListaOtimizada produtos={sala.produtos} precos={sala.precos||{}} participantes={sala.participantes}/>
+    <ListaOtimizada produtos={sala.produtos} precos={precos} participantes={sala.participantes}/>
     <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
     {mostrarScanner&&<BarcodeScanner onScan={handleScan} onClose={()=>setMostrarScanner(false)}/>}
     {mostrarCadastro&&<CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={()=>setMostrarCadastro(null)}/>}
