@@ -2,17 +2,36 @@ import{useEffect,useRef,useState}from'react'
 import{Html5Qrcode}from'html5-qrcode'
 export default function BarcodeScanner({onScan,onClose}){
   const scannerRef=useRef(null)
+  const lidoRef=useRef(false)
   const[erro,setErro]=useState(null)
   const[carregando,setCarregando]=useState(true)
+
+  const pararEAvisar=(decodedText)=>{
+    if(lidoRef.current)return
+    lidoRef.current=true
+    const s=scannerRef.current
+    if(!s){onScan(decodedText);return}
+    // Para e limpa o scanner ANTES de avisar o pai — se avisarmos antes,
+    // o React desmonta essa div enquanto a lib ainda mexe nela por baixo
+    // dos panos, e isso deixa a tela em branco (erro não tratado).
+    s.stop().then(()=>{try{s.clear()}catch(e){}}).catch(()=>{}).finally(()=>onScan(decodedText))
+  }
+
   useEffect(()=>{
+    lidoRef.current=false
     Html5Qrcode.getCameras().then(cameras=>{
       if(cameras.length===0){setErro('Nenhuma câmera encontrada.');setCarregando(false);return}
       const camera=cameras.find(c=>c.label.toLowerCase().includes('back'))||cameras[cameras.length-1]
       scannerRef.current=new Html5Qrcode('barcode-scanner')
-      scannerRef.current.start(camera.id,{fps:10,qrbox:{width:250,height:150}},(decodedText)=>{onScan(decodedText);scannerRef.current?.stop().catch(()=>{})},()=>{}).then(()=>setCarregando(false)).catch(err=>{setErro('Erro: '+err.message);setCarregando(false)})
+      scannerRef.current.start(camera.id,{fps:10,qrbox:{width:250,height:150}},(decodedText)=>pararEAvisar(decodedText),()=>{}).then(()=>setCarregando(false)).catch(err=>{setErro('Erro: '+err.message);setCarregando(false)})
     }).catch(err=>{setErro('Erro: '+err.message);setCarregando(false)})
-    return()=>{scannerRef.current?.stop().catch(()=>{})}
-  },[onScan])
+    return()=>{
+      if(!lidoRef.current){
+        const s=scannerRef.current
+        if(s){s.stop().then(()=>{try{s.clear()}catch(e){}}).catch(()=>{})}
+      }
+    }
+  },[])
   return<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.85)',zIndex:1000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16}}>
     <div style={{width:'100%',maxWidth:400,background:'white',borderRadius:16,overflow:'hidden'}}>
       <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
