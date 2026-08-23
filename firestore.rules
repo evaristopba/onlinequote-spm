@@ -31,6 +31,11 @@ service cloud.firestore {
           && request.resource.data.mercado is string
           && request.resource.data.preco is number
           && request.resource.data.preco > 0
+          // Marcacao de oferta (convenio/fidelidade/clube): opcional, mas
+          // se vier tem que ter o tipo certo pra ninguem gravar lixo.
+          && (!('oferta' in request.resource.data) || request.resource.data.oferta is bool)
+          && (!('tipoOferta' in request.resource.data) || (request.resource.data.tipoOferta is string && request.resource.data.tipoOferta.size() <= 40))
+          && (!('obsOferta' in request.resource.data) || (request.resource.data.obsOferta is string && request.resource.data.obsOferta.size() <= 120))
           && get(/databases/$(database)/documents/salas/$(salaId)).data.participantes[request.auth.uid].mercado
              == request.resource.data.mercado;
 

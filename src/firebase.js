@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInAnonymously } from 'firebase/auth'
 import {
-  getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
   arrayUnion, collection, query, where, getDocs, addDoc, runTransaction
 } from 'firebase/firestore'
 
@@ -27,7 +28,16 @@ if (miss.length > 0) {
 } else {
   app = initializeApp(cfg)
   auth = getAuth(app)
-  db = getFirestore(app)
+  // Cache offline persistente (IndexedDB): mantem a sala e os precos ja vistos
+  // disponiveis quando a internet cai, e sincroniza sozinho ao voltar.
+  try {
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  } catch (e) {
+    console.warn('Cache offline indisponivel, seguindo sem persistencia:', e)
+    db = initializeFirestore(app, {})
+  }
 }
 
 export { auth, db }
@@ -161,13 +171,18 @@ export const escutarSala = (codigo, cb) => {
   return onSnapshot(ref, (s) => cb(s.exists() ? s.data() : null))
 }
 
-export const lancarPreco = async (codigo, produtoId, mercado, preco) => {
+export const lancarPreco = async (codigo, produtoId, mercado, preco, oferta = null) => {
   if (!db) throw new Error('Firebase nao inicializado')
   const precoId = `${produtoId}__${sanitizarId(mercado)}`
   await setDoc(doc(db, 'salas', codigo, 'precos', precoId), {
     produtoId,
     mercado,
     preco: parseFloat(preco),
+    // Marcacao de oferta: preco unico, sinalizando quando depende de
+    // convenio/fidelidade/clube pra valer aquele valor.
+    oferta: !!(oferta && oferta.tipo),
+    tipoOferta: (oferta && oferta.tipo) || '',
+    obsOferta: (oferta && oferta.obs) || '',
     atualizadoPor: auth?.currentUser?.uid || null,
     atualizadoEm: new Date().toISOString(),
   })
@@ -186,7 +201,13 @@ export const escutarPrecos = (codigo, cb) => {
     snap.forEach((docSnap) => {
       const d = docSnap.data()
       if (!precos[d.produtoId]) precos[d.produtoId] = {}
-      precos[d.produtoId][d.mercado] = d.preco
+      precos[d.produtoId][d.mercado] = {
+        preco: d.preco,
+        oferta: !!d.oferta,
+        tipoOferta: d.tipoOferta || '',
+        obsOferta: d.obsOferta || '',
+        atualizadoEm: d.atualizadoEm || null,
+      }
     })
     cb(precos)
   })
