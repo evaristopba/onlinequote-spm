@@ -18,7 +18,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
 
-  // 🔥 Campo de código de barras (opcional) - separado da categoria
+  // 🔥 Campo de código de barras (opcional)
   const [codigoBarras, setCodigoBarras] = useState(inicial?.codigo || '')
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [erroCodigo, setErroCodigo] = useState(null)
@@ -74,7 +74,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     setValorQtd(qtd.valor)
     setUnidadeQtd(produto.unidade || qtd.unidade || 'un')
     setCategoria(produto.categoria || 'Outros')
-    setCodigoBarras(produto.codigoBarras || '')  // 🔥 Garantindo que é string
+    setCodigoBarras(produto.codigoBarras || '')
     setMostrarSugestoes(false)
   }
 
@@ -143,6 +143,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
           console.log('✅ Produto salvo na base própria com código:', codigoBarras)
         } catch (e) {
           console.warn('Erro ao salvar na base própria:', e)
+          // Continua mesmo se falhar
         }
       }
 
@@ -304,7 +305,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                         <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                           {prod.quantidade} {prod.unidade || 'un'} · {prod.categoria || 'Outros'}
                           {prod.marca && ` · ${prod.marca}`}
-                          {prod.codigoBarras && ` · Cód: ${prod.codigoBarras}`}
                         </div>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600, background: '#ecfdf5', padding: '2px 10px', borderRadius: 999 }}>
@@ -322,7 +322,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             )}
           </div>
 
-          {/* 🔥 Código de barras - campo separado */}
+          {/* 🔥 Código de barras (opcional) */}
           <div>
             <label style={label}>Código de barras (opcional)</label>
             <input
