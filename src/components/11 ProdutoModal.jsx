@@ -17,53 +17,19 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [obsOferta, setObsOferta] = useState(inicial?.obsOferta || '')
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
-  const editandoProdutoId = inicial?.editandoProdutoId || null
 
-  // 🔥 Código de barras - IGNORA o inicial.codigo e busca na base
-  const [codigoBarras, setCodigoBarras] = useState('')
+  const [codigoBarras, setCodigoBarras] = useState(inicial?.codigo || '')
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [erroCodigo, setErroCodigo] = useState(null)
-  const [produtoBaseId, setProdutoBaseId] = useState(null)
-  const [carregandoCodigo, setCarregandoCodigo] = useState(true)
+  const [produtoBaseId, setProdutoBaseId] = useState(inicial?.produtoBaseId || null)
 
-  // 🔥 SEMPRE busca o código na base própria quando é edição
-  useEffect(() => {
-    const buscarCodigoNaBase = async () => {
-      // Se não é edição, não busca
-      if (!editandoProdutoId || !nome) {
-        setCarregandoCodigo(false)
-        return
-      }
-      
-      setCarregandoCodigo(true)
-      try {
-        // Busca pelo nome exato
-        const resultados = await buscarProdutosPorNome(nome, 5)
-        const encontrado = resultados.find(p => p.nome === nome)
-        if (encontrado && encontrado.codigoBarras) {
-          setCodigoBarras(encontrado.codigoBarras)
-          setProdutoBaseId(encontrado.id)
-        } else {
-          setCodigoBarras('')
-          setProdutoBaseId(null)
-        }
-      } catch (e) {
-        console.warn('Erro ao buscar código na base:', e)
-        setCodigoBarras('')
-      }
-      setCarregandoCodigo(false)
-    }
-    buscarCodigoNaBase()
-  }, [editandoProdutoId, nome])
-
-  // 🔥 Autocomplete
   const [termoBusca, setTermoBusca] = useState(inicial?.nome || '')
   const [sugestoes, setSugestoes] = useState([])
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false)
   const inputRef = useRef(null)
   const sugestaoRef = useRef(null)
 
-  const habilitarAutocomplete = !somentePreco && !editandoProdutoId && inicial?.editandoIdx === undefined
+  const habilitarAutocomplete = !somentePreco && !inicial?.editandoProdutoId && inicial?.editandoIdx === undefined
 
   useEffect(() => {
     if (!habilitarAutocomplete || termoBusca.length < 2) {
@@ -301,7 +267,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                 onKeyDown={handleKeyDown}
                 style={{ ...inp, background: 'white' }}
                 placeholder="Ex: Tapioca 500g"
-                disabled={!habilitarAutocomplete && !!editandoProdutoId}
+                disabled={!habilitarAutocomplete && !!inicial?.editandoProdutoId}
               />
               {habilitarAutocomplete && mostrarSugestoes && sugestoes.length > 0 && (
                 <div
@@ -360,23 +326,19 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
 
           <div>
             <label style={label}>Código de barras</label>
-            {carregandoCodigo && editandoProdutoId ? (
-              <div style={{ padding: '10px 12px', color: '#94a3b8' }}>🔍 Buscando código...</div>
-            ) : (
-              <input
-                type="text"
-                inputMode="numeric"
-                value={codigoBarras}
-                onChange={e => {
-                  setCodigoBarras(e.target.value)
-                  setErroCodigo(null)
-                }}
-                onBlur={() => { if (codigoBarras.trim()) validarCodigoBarras(codigoBarras.trim()) }}
-                onKeyDown={handleKeyDown}
-                style={{ ...inp, borderColor: erroCodigo ? '#ef4444' : '#e2e8f0' }}
-                placeholder="Digite ou escaneie o código de barras"
-              />
-            )}
+            <input
+              type="text"
+              inputMode="numeric"
+              value={codigoBarras}
+              onChange={e => {
+                setCodigoBarras(e.target.value)
+                setErroCodigo(null)
+              }}
+              onBlur={() => { if (codigoBarras.trim()) validarCodigoBarras(codigoBarras.trim()) }}
+              onKeyDown={handleKeyDown}
+              style={{ ...inp, borderColor: erroCodigo ? '#ef4444' : '#e2e8f0' }}
+              placeholder="Digite ou escaneie o código de barras"
+            />
             {erroCodigo && (
               <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: 2 }}>
                 ⚠️ {erroCodigo}

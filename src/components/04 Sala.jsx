@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria } from '../firebase.js'
+import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria, buscarProdutosPorNome } from '../firebase.js'
 import { parsePreco, formatarDataRelativa } from '../utils/ptBR.js'
 import { buscarProdutoPorCodigo } from '../utils/barcode.js'
 import { infoPreco } from '../utils/precos.js'
@@ -166,22 +166,38 @@ export default function Sala() {
     })
   }
 
+  // 🔥 CORREÇÃO: busca o código na base própria e atualiza o produto na sala
   const handleConfirmarProduto = async (dados) => {
     let produtoId = mostrarProdutoModal?.editandoProdutoId
     
     if (produtoId) {
-      // 🔥 EDIÇÃO: atualiza TODOS os campos, incluindo codigo
+      // É edição de produto existente
       if (!mostrarProdutoModal?.somentePreco) {
+        // 🔥 Busca o código de barras na base própria pelo nome
+        let codigoDaBase = dados.codigo
+        if (!codigoDaBase) {
+          try {
+            const resultados = await buscarProdutosPorNome(dados.nome, 3)
+            const encontrado = resultados.find(p => p.nome === dados.nome)
+            if (encontrado && encontrado.codigoBarras) {
+              codigoDaBase = encontrado.codigoBarras
+            }
+          } catch (e) {
+            console.warn('Erro ao buscar código na base:', e)
+          }
+        }
+        
+        // 🔥 Atualiza o produto na sala com o código de barras (se encontrado)
         await editarProduto(codigo, produtoId, {
           nome: dados.nome,
           quantidade: dados.quantidade,
           unidade: dados.unidade || 'un',
           categoria: dados.categoria,
-          codigo: dados.codigo || null  // 🔥 AQUI ESTÁ A CORREÇÃO
+          codigo: codigoDaBase || null  // 🔥 Atualiza o código na sala
         })
       }
     } else {
-      // CRIAÇÃO
+      // É criação de novo produto
       const dup = dados.codigo ? produtos.find(p => p.codigo && String(p.codigo) === String(dados.codigo)) : null
       if (dup) {
         setMostrarProdutoModal(null)
@@ -197,7 +213,22 @@ export default function Sala() {
     setMostrarProdutoModal(null)
   }
 
-  const handleEditarProduto = (p) => {
+  const handleEditarProduto = async (p) => {
+    // 🔥 Busca o código de barras na base própria pelo nome
+    let codigoBuscado = p.codigo || null
+    
+    if (!codigoBuscado && p.nome) {
+      try {
+        const resultados = await buscarProdutosPorNome(p.nome, 3)
+        const encontrado = resultados.find(prod => prod.nome === p.nome)
+        if (encontrado && encontrado.codigoBarras) {
+          codigoBuscado = encontrado.codigoBarras
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar código na base:', e)
+      }
+    }
+    
     setMostrarProdutoModal({
       titulo: '✏️ Editar produto',
       inicial: {
@@ -205,12 +236,13 @@ export default function Sala() {
         quantidade: p.quantidade,
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
-        codigo: p.codigo || null,  // 🔥 USA O QUE ESTÁ NA SALA
+        codigo: codigoBuscado,  // 🔥 Agora vem da base própria
         preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
         tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
         obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',
       },
       editandoProdutoId: p.id,
+      produtoBaseId: null,
     })
   }
 
