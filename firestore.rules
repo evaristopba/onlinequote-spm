@@ -7,8 +7,37 @@ service cloud.firestore {
     // Cada documento = uma sala de cotação
     // ============================================
     match /salas/{salaId} {
-      // Qualquer usuário autenticado pode ler, criar e atualizar
-      allow read, create, update: if request.auth != null;
+      // Leitura e criação livres para qualquer usuário autenticado.
+      allow read, create: if request.auth != null;
+
+      // Update NÃO é mais livre. Baseado no que o app realmente faz com
+      // updateDoc()/transação na sala, só duas coisas podem mudar de cada
+      // vez — nunca o documento inteiro:
+      //
+      //  1) entrarSala() grava só a PRÓPRIA entrada em participantes
+      //     (participantes.<meu uid>) — ninguém pode escrever ou apagar
+      //     a entrada de outro participante nem trocar de "dono".
+      //  2) adicionarProduto()/editarProduto()/removerProduto() só mexem
+      //     no array `produtos` — continua liberado pra qualquer
+      //     participante, é o catálogo compartilhado da cotação.
+      //
+      // nome, criadoEm, ativa e criadorUid nunca aparecem nessas duas
+      // listas, então ficam automaticamente imutáveis após a criação —
+      // é o que fecha o "sequestro de sala" (trocar criadorUid pra depois
+      // poder excluir) e a falsificação de participante/mercado.
+      allow update: if request.auth != null && (
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantes'])
+          && request.resource.data.participantes.diff(resource.data.participantes).affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.participantes[request.auth.uid].uid == request.auth.uid
+          && request.resource.data.participantes[request.auth.uid].nome is string
+          && request.resource.data.participantes[request.auth.uid].mercado is string
+        )
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['produtos'])
+          && request.resource.data.produtos is list
+        )
+      );
 
       // Quem criou a sala pode excluí-la. Salas antigas (criadas antes do
       // campo criadorUid existir) não têm como saber quem criou — nesse

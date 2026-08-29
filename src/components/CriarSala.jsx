@@ -328,9 +328,11 @@ export default function CriarSala() {
       {mostrarCadastro && <CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={() => setMostrarCadastro(null)} />}
       {mostrarProdutoModal && (
         <ProdutoModal
+          key={mostrarProdutoModal.editandoIdx ?? 'novo'}
           titulo={mostrarProdutoModal.titulo}
           aviso={mostrarProdutoModal.aviso}
           inicial={mostrarProdutoModal.inicial}
+          editandoIdx={mostrarProdutoModal.editandoIdx}
           meuMercado={mercado.trim() || null}
           onConfirmar={handleConfirmarProduto}
           onCancelar={() => {

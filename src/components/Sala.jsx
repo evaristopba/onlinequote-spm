@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria, buscarProdutosPorNome } from '../firebase.js'
+import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria } from '../firebase.js'
 import { parsePreco, formatarDataRelativa } from '../utils/ptBR.js'
 import { buscarProdutoPorCodigo } from '../utils/barcode.js'
 import { infoPreco } from '../utils/precos.js'
@@ -195,23 +195,12 @@ export default function Sala() {
     setMostrarProdutoModal(null)
   }
 
-  // 🔥 CORREÇÃO: Busca o código na base própria e passa para o modal
-  const handleEditarProduto = async (p) => {
-    let codigoEncontrado = p.codigo || null
-    
-    // 🔥 Se o produto não tem código na sala, busca na base própria
-    if (!codigoEncontrado && p.nome) {
-      try {
-        const resultados = await buscarProdutosPorNome(p.nome, 5)
-        const encontrado = resultados.find(prod => prod.nome === p.nome)
-        if (encontrado && encontrado.codigoBarras) {
-          codigoEncontrado = encontrado.codigoBarras
-        }
-      } catch (e) {
-        console.warn('Erro ao buscar código na base:', e)
-      }
-    }
-    
+  // O código de barras do produto vem SEMPRE do próprio item da sala
+  // (p.codigo), nunca de busca por nome — nome não é único na base e
+  // pode trazer o código de barras de um produto diferente. Se o item
+  // ainda não tem código, o modal deixa o campo em branco e permite
+  // digitar/validar um novo (ver ProdutoModal.jsx).
+  const handleEditarProduto = (p) => {
     setMostrarProdutoModal({
       titulo: '✏️ Editar produto',
       inicial: {
@@ -219,7 +208,7 @@ export default function Sala() {
         quantidade: p.quantidade,
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
-        codigo: codigoEncontrado,
+        codigo: p.codigo || null,
         preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
         tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
         obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',
@@ -281,9 +270,11 @@ export default function Sala() {
       {mostrarCadastro && <CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={() => setMostrarCadastro(null)} />}
       {mostrarProdutoModal && (
         <ProdutoModal
+          key={mostrarProdutoModal.editandoProdutoId || 'novo'}
           titulo={mostrarProdutoModal.titulo}
           aviso={mostrarProdutoModal.aviso}
           inicial={mostrarProdutoModal.inicial}
+          editandoProdutoId={mostrarProdutoModal.editandoProdutoId}
           meuMercado={meuMercado}
           onConfirmar={handleConfirmarProduto}
           onCancelar={() => setMostrarProdutoModal(null)}

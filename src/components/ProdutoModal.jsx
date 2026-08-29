@@ -6,7 +6,7 @@ import { buscarProdutosPorNome, buscarProdutoBasePropria, salvarProdutoBasePropr
 const CATEGORIAS = ['Alimentos', 'Bebidas', 'Limpeza', 'Higiene', 'Frios e Laticínios', 'Padaria', 'Açougue', 'Outros']
 const UNIDADES = ['g', 'kg', 'ml', 'L', 'un', 'pct', 'cx', 'caixa', 'pacote']
 
-export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onConfirmar, onCancelar }) {
+export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, editandoProdutoId = null, editandoIdx, onConfirmar, onCancelar }) {
   const qtdInicial = parseQuantidadeExistente(inicial?.quantidade)
   const [nome, setNome] = useState(inicial?.nome || '')
   const [valorQtd, setValorQtd] = useState(qtdInicial.valor)
@@ -17,7 +17,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [obsOferta, setObsOferta] = useState(inicial?.obsOferta || '')
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
-  const editandoProdutoId = inicial?.editandoProdutoId || null
 
   // 🔥 Estado do código de barras
   const [codigoBarras, setCodigoBarras] = useState('')
@@ -27,34 +26,39 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [produtoBaseId, setProdutoBaseId] = useState(null)
   const [carregandoCodigo, setCarregandoCodigo] = useState(false)
 
-  // 🔥 Busca o código na base própria se for edição
+  // Carrega o código de barras já existente ao editar um produto da sala.
+  // A fonte da verdade é sempre `inicial.codigo` (o código já associado a
+  // esse item específico) — nunca uma busca por nome, que não é único e
+  // pode trazer o código de barras de outro produto. Aqui só confirmamos
+  // se esse código ainda existe na base própria, pra saber se é uma
+  // edição (produtoBaseId preenchido) ou um código "solto".
   useEffect(() => {
-    const buscarCodigoNaBase = async () => {
-      if (!editandoProdutoId || !nome) return
-      
-      setCarregandoCodigo(true)
-      try {
-        const resultados = await buscarProdutosPorNome(nome, 5)
-        const encontrado = resultados.find(p => p.nome === nome)
-        if (encontrado && encontrado.codigoBarras) {
-          const codigo = encontrado.codigoBarras
-          setCodigoBarras(codigo)
-          setCodigoOriginal(codigo) // 🔥 Guarda o original
-          setProdutoBaseId(encontrado.id)
-        } else {
-          setCodigoBarras('')
-          setCodigoOriginal('')
-          setProdutoBaseId(null)
-        }
-      } catch (e) {
-        console.warn('Erro ao buscar código na base:', e)
+    const carregarCodigoExistente = async () => {
+      if (!editandoProdutoId || somentePreco) return
+      const codigoDoProduto = inicial?.codigo || ''
+      if (!codigoDoProduto) {
         setCodigoBarras('')
         setCodigoOriginal('')
+        setProdutoBaseId(null)
+        return
+      }
+      setCarregandoCodigo(true)
+      try {
+        const encontrado = await buscarProdutoBasePropria(codigoDoProduto)
+        setCodigoBarras(codigoDoProduto)
+        setCodigoOriginal(codigoDoProduto)
+        setProdutoBaseId(encontrado?.id || null)
+      } catch (e) {
+        console.warn('Erro ao validar código na base:', e)
+        setCodigoBarras(codigoDoProduto)
+        setCodigoOriginal(codigoDoProduto)
+        setProdutoBaseId(null)
       }
       setCarregandoCodigo(false)
     }
-    buscarCodigoNaBase()
-  }, [editandoProdutoId, nome])
+    carregarCodigoExistente()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editandoProdutoId])
 
   // 🔥 Autocomplete
   const [termoBusca, setTermoBusca] = useState(inicial?.nome || '')
@@ -63,7 +67,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const inputRef = useRef(null)
   const sugestaoRef = useRef(null)
 
-  const habilitarAutocomplete = !somentePreco && !editandoProdutoId && inicial?.editandoIdx === undefined
+  const habilitarAutocomplete = !somentePreco && !editandoProdutoId && editandoIdx === undefined
 
   useEffect(() => {
     if (!habilitarAutocomplete || termoBusca.length < 2) {
