@@ -48,6 +48,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     }
   }
 
+  // Formata a quantidade para exibição ao vivo
   const qtdExibicao = formatarQuantidade(valorQtd, unidadeQtd)
 
   return (

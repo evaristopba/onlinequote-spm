@@ -3,8 +3,7 @@ import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } f
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
-  arrayUnion, collection, query, where, getDocs, addDoc, runTransaction,
-  orderBy, limit, startAt, endAt
+  arrayUnion, collection, query, where, getDocs, addDoc, runTransaction
 } from 'firebase/firestore'
 
 const cfg = {
@@ -29,6 +28,8 @@ if (miss.length > 0) {
 } else {
   app = initializeApp(cfg)
   auth = getAuth(app)
+  // Cache offline persistente (IndexedDB): mantem a sala e os precos ja vistos
+  // disponiveis quando a internet cai, e sincroniza sozinho ao voltar.
   try {
     db = initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
@@ -43,6 +44,8 @@ export { auth, db }
 
 export const loginAnonimo = () => {
   if (!auth) return Promise.reject(new Error('Firebase nao inicializado. Verifique o arquivo .env.'))
+  // 🔥 NOVO: Persiste o login anonimo no localStorage para manter o mesmo UID
+  // mesmo depois de fechar e reabrir o navegador.
   return setPersistence(auth, browserLocalPersistence)
     .then(() => signInAnonymously(auth))
 }
@@ -64,40 +67,6 @@ export const buscarProdutoBasePropria = async (codigoBarras) => {
   return { id: snap.docs[0].id, ...d }
 }
 
-// 🔥 NOVO: Busca produtos por nome (autocomplete)
-export const buscarProdutosPorNome = async (termo, limite = 10) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  if (!termo || termo.length < 2) return []
-  
-  const termoLower = termo.toLowerCase().trim()
-  const termoUpper = termoLower.charAt(0).toUpperCase() + termoLower.slice(1)
-  
-  // Busca produtos ativos com nome começando com o termo
-  const qry = query(
-    collection(db, 'produtos'),
-    where('ativo', '==', true),
-    orderBy('nome'),
-    startAt(termoUpper),
-    endAt(termoUpper + '\uf8ff'),
-    limit(limite)
-  )
-  
-  try {
-    const snap = await getDocs(qry)
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-  } catch (e) {
-    // Fallback: se a busca com orderBy falhar (ex: índice não criado), busca sem ordenação
-    console.warn('Busca com orderBy falhou, usando fallback:', e)
-    const fallbackQry = query(collection(db, 'produtos'), where('ativo', '==', true), limit(limite * 2))
-    const snap = await getDocs(fallbackQry)
-    const resultados = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-    // Filtra manualmente
-    return resultados.filter(p => 
-      p.nome && p.nome.toLowerCase().includes(termoLower)
-    ).slice(0, limite)
-  }
-}
-
 export const salvarProdutoBasePropria = async (dados) => {
   if (!db) throw new Error('Firebase nao inicializado')
   const docRef = await addDoc(collection(db, 'produtos'), {
@@ -115,12 +84,15 @@ export const salvarProdutoBasePropria = async (dados) => {
   return docRef.id
 }
 
+// Lista os produtos ativos da base propria, pra tela de manutencao
 export const listarBasePropria = async () => {
   if (!db) throw new Error('Firebase nao inicializado')
   const snap = await getDocs(collection(db, 'produtos'))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
+// Corrige dados de um produto ja cadastrado (nome, marca, categoria, quantidade, unidade).
+// Nao permite trocar o codigo de barras nem quem cadastrou (protegido pela regra tambem).
 export const editarProdutoBasePropria = async (id, dados) => {
   if (!db) throw new Error('Firebase nao inicializado')
   await updateDoc(doc(db, 'produtos', id), {
@@ -132,6 +104,8 @@ export const editarProdutoBasePropria = async (id, dados) => {
   })
 }
 
+// Ativa/desativa um produto da base (soft-delete — mantem o historico,
+// so para de aparecer nas buscas por codigo de barras)
 export const definirAtivoBasePropria = async (id, ativo) => {
   if (!db) throw new Error('Firebase nao inicializado')
   await updateDoc(doc(db, 'produtos', id), { ativo })
@@ -166,7 +140,6 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
       id: `p${i}`,
       nome: p.nome,
       quantidade: p.quantidade || '1.000 un',
-      unidade: p.unidade || 'un',
       codigo: p.codigo || null,
       categoria: p.categoria || 'Outros',
     })),
@@ -208,6 +181,8 @@ export const lancarPreco = async (codigo, produtoId, mercado, preco, oferta = nu
     produtoId,
     mercado,
     preco: parseFloat(preco),
+    // Marcacao de oferta: preco unico, sinalizando quando depende de
+    // convenio/fidelidade/clube pra valer aquele valor.
     oferta: !!(oferta && oferta.tipo),
     tipoOferta: (oferta && oferta.tipo) || '',
     obsOferta: (oferta && oferta.obs) || '',
@@ -216,6 +191,8 @@ export const lancarPreco = async (codigo, produtoId, mercado, preco, oferta = nu
   })
 }
 
+// Escuta a subcolecao de precos e monta o mesmo formato { produtoId: { mercado: preco } }
+// que os componentes de tela ja esperam, entao nenhum componente precisa mudar.
 export const escutarPrecos = (codigo, cb) => {
   if (!db) {
     console.error('Firebase nao inicializado')
@@ -243,6 +220,9 @@ function sanitizarId(s) {
   return String(s).trim().replace(/\//g, '_') || 'mercado'
 }
 
+// Edita um produto ja adicionado na sala (nome, quantidade, categoria).
+// Usa transacao pra nao perder concorrencia com outro participante adicionando
+// produto ao mesmo tempo (arrayUnion + overwrite bruto do array poderia colidir).
 export const editarProduto = async (codigo, produtoId, dadosNovos) => {
   if (!db) throw new Error('Firebase nao inicializado')
   const salaRef = doc(db, 'salas', codigo)
@@ -258,6 +238,9 @@ export const editarProduto = async (codigo, produtoId, dadosNovos) => {
   })
 }
 
+// Remove um produto da sala e limpa os precos associados (best-effort —
+// se algum preco de outro mercado nao puder ser apagado por permissao,
+// fica orfao na subcolecao, mas nunca mais aparece na tela).
 export const removerProduto = async (codigo, produtoId) => {
   if (!db) throw new Error('Firebase nao inicializado')
   try {
@@ -277,22 +260,18 @@ export const removerProduto = async (codigo, produtoId) => {
   })
 }
 
-export const adicionarProduto = async (codigo, nome, quantidade, unidade, codigoBarras = null, categoria = 'Outros') => {
+export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = null, categoria = 'Outros') => {
   if (!db) throw new Error('Firebase nao inicializado')
   const id = `p${Date.now()}`
   await updateDoc(doc(db, 'salas', codigo), {
-    produtos: arrayUnion({ 
-      id, 
-      nome, 
-      quantidade: quantidade || 1, 
-      unidade: unidade || 'un',
-      codigo: codigoBarras, 
-      categoria 
-    }),
+    produtos: arrayUnion({ id, nome, quantidade: quantidade || '1.000 un', codigo: codigoBarras, categoria }),
   })
   return id
 }
 
+// Lista as salas onde o usuario logado participa (inclui salas antigas,
+// criadas antes do campo criadorUid existir — nelas, qualquer participante
+// conta como "dono" pra fins de limpeza, ja que nao da pra saber quem criou)
 export const listarMinhasSalas = async () => {
   if (!db || !auth?.currentUser) throw new Error('Nao autenticado')
   const uid = auth.currentUser.uid
@@ -301,6 +280,8 @@ export const listarMinhasSalas = async () => {
   return snap.docs.map((d) => ({ codigo: d.id, ...d.data() }))
 }
 
+// Exclui a sala inteira. Precisa apagar a subcolecao de precos manualmente,
+// pois o Firestore nao remove subcolecoes junto com o documento pai.
 export const excluirSala = async (codigo) => {
   if (!db) throw new Error('Firebase nao inicializado')
   const precosRef = collection(db, 'salas', codigo, 'precos')
