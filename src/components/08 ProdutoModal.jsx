@@ -18,15 +18,8 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
 
-  // 🔥 Código de barras - com validação de que é número
-  const codigoInicial = (() => {
-    const val = inicial?.codigo || ''
-    // Só aceita se for número com 8+ dígitos
-    if (/^\d{8,}$/.test(val)) return val
-    return ''
-  })()
-
-  const [codigoBarras, setCodigoBarras] = useState(codigoInicial)
+  // 🔥 Campo de código de barras (opcional) - separado da categoria
+  const [codigoBarras, setCodigoBarras] = useState(inicial?.codigo || '')
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [erroCodigo, setErroCodigo] = useState(null)
 
@@ -37,8 +30,10 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const inputRef = useRef(null)
   const sugestaoRef = useRef(null)
 
+  // 🔥 Só ativa autocomplete se for criação de novo produto (não edição, não somentePreco)
   const habilitarAutocomplete = !somentePreco && !inicial?.editandoProdutoId && inicial?.editandoIdx === undefined
 
+  // 🔥 Busca sugestões quando digita
   useEffect(() => {
     if (!habilitarAutocomplete || termoBusca.length < 2) {
       setSugestoes([])
@@ -59,6 +54,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     return () => clearTimeout(delay)
   }, [termoBusca, habilitarAutocomplete])
 
+  // 🔥 Fecha sugestões ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (sugestaoRef.current && !sugestaoRef.current.contains(e.target) &&
@@ -70,6 +66,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // 🔥 Seleciona um produto das sugestões
   const selecionarProduto = (produto) => {
     const qtd = parseQuantidadeExistente(produto.quantidade)
     setNome(produto.nome || '')
@@ -77,11 +74,11 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     setValorQtd(qtd.valor)
     setUnidadeQtd(produto.unidade || qtd.unidade || 'un')
     setCategoria(produto.categoria || 'Outros')
-    const codigo = produto.codigoBarras || ''
-    setCodigoBarras(/^\d{8,}$/.test(codigo) ? codigo : '')
+    setCodigoBarras(produto.codigoBarras || '')  // 🔥 Garantindo que é string
     setMostrarSugestoes(false)
   }
 
+  // 🔥 Valida código de barras (se preenchido)
   const validarCodigoBarras = async (codigo) => {
     if (!codigo || codigo.length < 8) {
       setErroCodigo(null)
@@ -113,6 +110,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     if (preco.trim() && precoNum === null) return alert('Preço inválido')
     if (somentePreco && precoNum === null) return alert('Informe o preço')
 
+    // Valida código de barras se preenchido
     if (codigoBarras.trim()) {
       const valido = await validarCodigoBarras(codigoBarras.trim())
       if (!valido) return
@@ -130,6 +128,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
         oferta: precoNum != null && tipoOferta ? { tipo: tipoOferta, obs: obsOferta.trim() } : null,
       }
 
+      // 🔥 Se o usuário preencheu um código de barras, salva na base própria
       if (codigoBarras.trim() && !inicial?.editandoProdutoId) {
         try {
           await salvarProdutoBasePropria({
@@ -163,6 +162,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
 
   const qtdExibicao = formatarQuantidade(valorQtd, unidadeQtd)
 
+  // 🔥 Se for somente preço, mostra versão simplificada
   if (somentePreco) {
     return (
       <div style={overlay}>
@@ -233,6 +233,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     )
   }
 
+  // 🔥 Modal completo com autocomplete e código de barras
   return (
     <div style={overlay}>
       <div style={card}>
@@ -303,6 +304,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                         <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
                           {prod.quantidade} {prod.unidade || 'un'} · {prod.categoria || 'Outros'}
                           {prod.marca && ` · ${prod.marca}`}
+                          {prod.codigoBarras && ` · Cód: ${prod.codigoBarras}`}
                         </div>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600, background: '#ecfdf5', padding: '2px 10px', borderRadius: 999 }}>
@@ -320,6 +322,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             )}
           </div>
 
+          {/* 🔥 Código de barras - campo separado */}
           <div>
             <label style={label}>Código de barras (opcional)</label>
             <input
@@ -391,11 +394,9 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               </select>
             </div>
           </div>
-
           <div style={{ fontSize: '0.8rem', color: '#64748b', background: '#f8fafc', padding: '6px 10px', borderRadius: 6 }}>
             📦 Tamanho do pacote: {qtdExibicao}
           </div>
-
           {meuMercado && (
             <div>
               <label style={label}>
@@ -415,7 +416,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               </div>
             </div>
           )}
-
           {meuMercado && preco.trim() && (
             <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
               <label style={label}>Esse preço depende de convênio/fidelidade?</label>
@@ -439,14 +439,12 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               )}
             </div>
           )}
-
-          {inicial?.codigo && !codigoBarras && /^\d{8,}$/.test(inicial.codigo) && (
+          {inicial?.codigo && !codigoBarras && (
             <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
               📷 Código de barras original: {inicial.codigo}
             </div>
           )}
         </div>
-
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button
             onClick={handleConfirmar}
