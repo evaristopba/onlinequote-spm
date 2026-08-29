@@ -23,6 +23,25 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [erroCodigo, setErroCodigo] = useState(null)
   const [produtoBaseId, setProdutoBaseId] = useState(inicial?.produtoBaseId || null)
 
+  // Busca o código na base própria se for edição dentro da sala
+  useEffect(() => {
+    const buscarCodigoNaBase = async () => {
+      if (inicial?.editandoProdutoId && !codigoBarras && inicial?.nome) {
+        try {
+          const resultados = await buscarProdutosPorNome(inicial.nome, 5)
+          const encontrado = resultados.find(p => p.nome === inicial.nome)
+          if (encontrado && encontrado.codigoBarras) {
+            setCodigoBarras(encontrado.codigoBarras)
+            setProdutoBaseId(encontrado.id)
+          }
+        } catch (e) {
+          console.warn('Erro ao buscar código na base:', e)
+        }
+      }
+    }
+    buscarCodigoNaBase()
+  }, [inicial?.editandoProdutoId, inicial?.nome])
+
   const [termoBusca, setTermoBusca] = useState(inicial?.nome || '')
   const [sugestoes, setSugestoes] = useState([])
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false)

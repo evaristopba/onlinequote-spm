@@ -53,6 +53,7 @@ export const gerarCodigo = () => {
   return r
 }
 
+// ===== BASE PROPRIA DE PRODUTOS =====
 export const buscarProdutoBasePropria = async (codigoBarras) => {
   if (!db) throw new Error('Firebase nao inicializado')
   const qry = query(collection(db, 'produtos'), where('codigoBarras', '==', codigoBarras), where('ativo', '==', true))
@@ -120,6 +121,7 @@ export const definirAtivoBasePropria = async (id, ativo) => {
   await updateDoc(doc(db, 'produtos', id), { ativo })
 }
 
+// ===== SALAS =====
 export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado) => {
   if (!db || !auth) throw new Error('Firebase nao inicializado')
   const user = auth.currentUser

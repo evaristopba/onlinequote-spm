@@ -192,7 +192,11 @@ export default function Sala() {
     setMostrarProdutoModal(null)
   }
 
+  // 🔥 CORREÇÃO: handleEditarProduto agora passa o codigo correto
   const handleEditarProduto = (p) => {
+    // Busca o código de barras do produto na sala (pode ser null)
+    const codigoProduto = p.codigo || null
+    
     setMostrarProdutoModal({
       titulo: '✏️ Editar produto',
       inicial: {
@@ -200,13 +204,13 @@ export default function Sala() {
         quantidade: p.quantidade,
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
-        codigo: p.codigo || null,
+        codigo: codigoProduto,  // 🔥 Passa o código de barras, NÃO a categoria
         preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
         tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
         obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',
       },
       editandoProdutoId: p.id,
-      produtoBaseId: null,
+      produtoBaseId: null, // Será buscado pelo nome no modal
     })
   }
 
