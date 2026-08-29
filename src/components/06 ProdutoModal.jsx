@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { formatarQuantidade, parseQuantidadeExistente, formatarInputPreco, parsePreco } from '../utils/ptBR.js'
 import { TIPOS_OFERTA } from '../utils/precos.js'
-import { buscarProdutosPorNome, buscarProdutoBasePropria, salvarProdutoBasePropria } from '../firebase.js'
+import { buscarProdutosPorNome } from '../firebase.js'
 
 const CATEGORIAS = ['Alimentos', 'Bebidas', 'Limpeza', 'Higiene', 'Frios e Laticínios', 'Padaria', 'Açougue', 'Outros']
 const UNIDADES = ['g', 'kg', 'ml', 'L', 'un', 'pct', 'cx', 'caixa', 'pacote']
@@ -18,11 +18,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
 
-  // 🔥 Campo de código de barras (opcional)
-  const [codigoBarras, setCodigoBarras] = useState(inicial?.codigo || '')
-  const [validandoCodigo, setValidandoCodigo] = useState(false)
-  const [erroCodigo, setErroCodigo] = useState(null)
-
   // 🔥 Autocomplete
   const [termoBusca, setTermoBusca] = useState(inicial?.nome || '')
   const [sugestoes, setSugestoes] = useState([])
@@ -31,7 +26,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const sugestaoRef = useRef(null)
 
   // 🔥 Só ativa autocomplete se for criação de novo produto (não edição, não somentePreco)
-  const habilitarAutocomplete = !somentePreco && !inicial?.editandoProdutoId && inicial?.editandoIdx === undefined
+  const habilitarAutocomplete = !somentePreco && !inicial?.editandoProdutoId && !inicial?.editandoIdx !== undefined
 
   // 🔥 Busca sugestões quando digita
   useEffect(() => {
@@ -74,32 +69,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     setValorQtd(qtd.valor)
     setUnidadeQtd(produto.unidade || qtd.unidade || 'un')
     setCategoria(produto.categoria || 'Outros')
-    setCodigoBarras(produto.codigoBarras || '')
     setMostrarSugestoes(false)
-  }
-
-  // 🔥 Valida código de barras (se preenchido)
-  const validarCodigoBarras = async (codigo) => {
-    if (!codigo || codigo.length < 8) {
-      setErroCodigo(null)
-      return true
-    }
-    setValidandoCodigo(true)
-    try {
-      const existente = await buscarProdutoBasePropria(codigo)
-      if (existente && existente.id !== inicial?.produtoBaseId) {
-        setErroCodigo(`Código já pertence a "${existente.nome}"`)
-        setValidandoCodigo(false)
-        return false
-      }
-      setErroCodigo(null)
-      setValidandoCodigo(false)
-      return true
-    } catch (e) {
-      setErroCodigo('Erro ao validar código')
-      setValidandoCodigo(false)
-      return false
-    }
   }
 
   const handleConfirmar = async () => {
@@ -109,45 +79,17 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     const precoNum = preco.trim() ? parsePreco(preco) : null
     if (preco.trim() && precoNum === null) return alert('Preço inválido')
     if (somentePreco && precoNum === null) return alert('Informe o preço')
-
-    // Valida código de barras se preenchido
-    if (codigoBarras.trim()) {
-      const valido = await validarCodigoBarras(codigoBarras.trim())
-      if (!valido) return
-    }
-
     setSalvando(true)
     try {
-      const dadosProduto = {
+      await onConfirmar({
         nome: nome.trim(),
         quantidade: v,
         unidade: unidadeQtd.trim() || 'un',
         categoria,
-        codigo: codigoBarras.trim() || null,
+        codigo: inicial?.codigo || null,
         preco: precoNum,
         oferta: precoNum != null && tipoOferta ? { tipo: tipoOferta, obs: obsOferta.trim() } : null,
-      }
-
-      // 🔥 Se o usuário preencheu um código de barras, salva na base própria
-      if (codigoBarras.trim() && !inicial?.editandoProdutoId) {
-        try {
-          await salvarProdutoBasePropria({
-            codigoBarras: codigoBarras.trim(),
-            nome: nome.trim(),
-            marca: '',
-            categoria,
-            quantidade: v,
-            unidade: unidadeQtd.trim() || 'un',
-            imagem: null,
-          })
-          console.log('✅ Produto salvo na base própria com código:', codigoBarras)
-        } catch (e) {
-          console.warn('Erro ao salvar na base própria:', e)
-          // Continua mesmo se falhar
-        }
-      }
-
-      await onConfirmar(dadosProduto)
+      })
     } catch (e) {
       alert('Erro ao salvar produto: ' + e.message)
       setSalvando(false)
@@ -163,7 +105,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
 
   const qtdExibicao = formatarQuantidade(valorQtd, unidadeQtd)
 
-  // 🔥 Se for somente preço, mostra versão simplificada
+  // 🔥 Se for somente preço, não mostra autocomplete
   if (somentePreco) {
     return (
       <div style={overlay}>
@@ -234,7 +176,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     )
   }
 
-  // 🔥 Modal completo com autocomplete e código de barras
+  // 🔥 Modal completo com autocomplete para criação/edição
   return (
     <div style={overlay}>
       <div style={card}>
@@ -321,38 +263,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               </div>
             )}
           </div>
-
-          {/* 🔥 Código de barras (opcional) */}
-          <div>
-            <label style={label}>Código de barras (opcional)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={codigoBarras}
-              onChange={e => {
-                setCodigoBarras(e.target.value)
-                setErroCodigo(null)
-              }}
-              onBlur={() => { if (codigoBarras.trim()) validarCodigoBarras(codigoBarras.trim()) }}
-              onKeyDown={handleKeyDown}
-              style={{ ...inp, borderColor: erroCodigo ? '#ef4444' : '#e2e8f0' }}
-              placeholder="Digite ou escaneie o código de barras"
-            />
-            {erroCodigo && (
-              <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: 2 }}>
-                ⚠️ {erroCodigo}
-              </div>
-            )}
-            {validandoCodigo && (
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
-                🔍 Validando código...
-              </div>
-            )}
-            <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-              {codigoBarras.trim() ? '✅ Produto será salvo na base própria' : '⚠️ Sem código, não será salvo na base própria'}
-            </div>
-          </div>
-
           <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
             <div style={{ flex: 1 }}>
               <label style={label}>Peso / Volume do pacote</label>
@@ -439,17 +349,17 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               )}
             </div>
           )}
-          {inicial?.codigo && !codigoBarras && (
+          {inicial?.codigo && (
             <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-              📷 Código de barras original: {inicial.codigo}
+              📷 Código de barras: {inicial.codigo}
             </div>
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button
             onClick={handleConfirmar}
-            disabled={(!nome.trim()) || salvando || validandoCodigo}
-            style={{ ...btnPrim, opacity: ((!nome.trim()) || salvando || validandoCodigo) ? 0.6 : 1 }}
+            disabled={(!somentePreco && !nome.trim()) || salvando}
+            style={{ ...btnPrim, opacity: ((!somentePreco && !nome.trim()) || salvando) ? 0.6 : 1 }}
           >
             {salvando ? 'Salvando...' : '✓ Adicionar'}
           </button>
