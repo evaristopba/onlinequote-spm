@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria, buscarProdutosPorNome } from '../firebase.js'
+import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria } from '../firebase.js'
 import { parsePreco, formatarDataRelativa } from '../utils/ptBR.js'
 import { buscarProdutoPorCodigo } from '../utils/barcode.js'
 import { infoPreco } from '../utils/precos.js'
@@ -170,16 +170,18 @@ export default function Sala() {
     let produtoId = mostrarProdutoModal?.editandoProdutoId
     
     if (produtoId) {
+      // 🔥 EDIÇÃO: atualiza TODOS os campos, incluindo codigo
       if (!mostrarProdutoModal?.somentePreco) {
         await editarProduto(codigo, produtoId, {
           nome: dados.nome,
           quantidade: dados.quantidade,
           unidade: dados.unidade || 'un',
           categoria: dados.categoria,
-          codigo: dados.codigo || null
+          codigo: dados.codigo || null  // 🔥 AQUI ESTÁ A CORREÇÃO
         })
       }
     } else {
+      // CRIAÇÃO
       const dup = dados.codigo ? produtos.find(p => p.codigo && String(p.codigo) === String(dados.codigo)) : null
       if (dup) {
         setMostrarProdutoModal(null)
@@ -195,23 +197,7 @@ export default function Sala() {
     setMostrarProdutoModal(null)
   }
 
-  // 🔥 CORREÇÃO: Busca o código na base própria e passa para o modal
-  const handleEditarProduto = async (p) => {
-    let codigoEncontrado = p.codigo || null
-    
-    // 🔥 Se o produto não tem código na sala, busca na base própria
-    if (!codigoEncontrado && p.nome) {
-      try {
-        const resultados = await buscarProdutosPorNome(p.nome, 5)
-        const encontrado = resultados.find(prod => prod.nome === p.nome)
-        if (encontrado && encontrado.codigoBarras) {
-          codigoEncontrado = encontrado.codigoBarras
-        }
-      } catch (e) {
-        console.warn('Erro ao buscar código na base:', e)
-      }
-    }
-    
+  const handleEditarProduto = (p) => {
     setMostrarProdutoModal({
       titulo: '✏️ Editar produto',
       inicial: {
@@ -219,7 +205,7 @@ export default function Sala() {
         quantidade: p.quantidade,
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
-        codigo: codigoEncontrado,  // 🔥 Agora passa o código correto
+        codigo: p.codigo || null,  // 🔥 USA O QUE ESTÁ NA SALA
         preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
         tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
         obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',

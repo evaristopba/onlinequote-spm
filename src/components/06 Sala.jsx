@@ -125,7 +125,8 @@ export default function Sala() {
             quantidade: proprio.quantidade || 1,
             unidade: proprio.unidade || 'un',
             categoria: proprio.categoria || 'Outros',
-            codigo: proprio.codigoBarras || null
+            codigo: proprio.codigoBarras || null,
+            produtoBaseId: proprio.id  // 🔥 Passa o ID da base
           }
         })
         setBuscando(false)
@@ -195,17 +196,18 @@ export default function Sala() {
     setMostrarProdutoModal(null)
   }
 
-  // 🔥 CORREÇÃO: Busca o código na base própria e passa para o modal
+  // 🔥 CORREÇÃO: busca o produto na base própria e passa o ID
   const handleEditarProduto = async (p) => {
     let codigoEncontrado = p.codigo || null
+    let produtoBaseId = null
     
-    // 🔥 Se o produto não tem código na sala, busca na base própria
-    if (!codigoEncontrado && p.nome) {
+    if (p.nome) {
       try {
         const resultados = await buscarProdutosPorNome(p.nome, 5)
         const encontrado = resultados.find(prod => prod.nome === p.nome)
-        if (encontrado && encontrado.codigoBarras) {
-          codigoEncontrado = encontrado.codigoBarras
+        if (encontrado) {
+          codigoEncontrado = encontrado.codigoBarras || null
+          produtoBaseId = encontrado.id  // 🔥 PASSA O ID DA BASE
         }
       } catch (e) {
         console.warn('Erro ao buscar código na base:', e)
@@ -219,7 +221,8 @@ export default function Sala() {
         quantidade: p.quantidade,
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
-        codigo: codigoEncontrado,  // 🔥 Agora passa o código correto
+        codigo: codigoEncontrado,
+        produtoBaseId: produtoBaseId,  // 🔥 AGORA PASSA O ID CORRETO
         preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
         tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
         obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',

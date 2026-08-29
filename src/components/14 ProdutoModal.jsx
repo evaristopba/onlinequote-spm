@@ -19,37 +19,36 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const somentePreco = !!inicial?.somentePreco
   const editandoProdutoId = inicial?.editandoProdutoId || null
 
-  // 🔥 Estado do código de barras
+  // 🔥 IGNORA COMPLETAMENTE o inicial.codigo e busca na base
   const [codigoBarras, setCodigoBarras] = useState('')
-  const [codigoOriginal, setCodigoOriginal] = useState('') // 🔥 Guarda o código que veio da base
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [erroCodigo, setErroCodigo] = useState(null)
   const [produtoBaseId, setProdutoBaseId] = useState(null)
-  const [carregandoCodigo, setCarregandoCodigo] = useState(false)
+  const [carregandoCodigo, setCarregandoCodigo] = useState(true)
 
-  // 🔥 Busca o código na base própria se for edição
+  // 🔥 Busca o código na base própria SEMPRE que for edição
   useEffect(() => {
     const buscarCodigoNaBase = async () => {
-      if (!editandoProdutoId || !nome) return
+      // Se não é edição ou não tem nome, não busca
+      if (!editandoProdutoId || !nome) {
+        setCarregandoCodigo(false)
+        return
+      }
       
       setCarregandoCodigo(true)
       try {
         const resultados = await buscarProdutosPorNome(nome, 5)
         const encontrado = resultados.find(p => p.nome === nome)
         if (encontrado && encontrado.codigoBarras) {
-          const codigo = encontrado.codigoBarras
-          setCodigoBarras(codigo)
-          setCodigoOriginal(codigo) // 🔥 Guarda o original
+          setCodigoBarras(encontrado.codigoBarras)
           setProdutoBaseId(encontrado.id)
         } else {
           setCodigoBarras('')
-          setCodigoOriginal('')
           setProdutoBaseId(null)
         }
       } catch (e) {
         console.warn('Erro ao buscar código na base:', e)
         setCodigoBarras('')
-        setCodigoOriginal('')
       }
       setCarregandoCodigo(false)
     }
@@ -103,48 +102,27 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     setValorQtd(qtd.valor)
     setUnidadeQtd(produto.unidade || qtd.unidade || 'un')
     setCategoria(produto.categoria || 'Outros')
-    const codigo = produto.codigoBarras || ''
-    setCodigoBarras(codigo)
-    setCodigoOriginal(codigo)
+    setCodigoBarras(produto.codigoBarras || '')
     setProdutoBaseId(produto.id || null)
     setMostrarSugestoes(false)
   }
 
-  // 🔥 VALIDAÇÃO: Só valida se o usuário ALTEROU o campo
   const validarCodigoBarras = async (codigo) => {
-    // Se não digitou nada, não valida
-    if (!codigo || codigo.trim().length === 0) {
+    if (!codigo || codigo.length < 8) {
       setErroCodigo(null)
       return true
     }
-
-    // Se é igual ao original (veio da base), não valida
-    if (codigo === codigoOriginal) {
-      setErroCodigo(null)
-      return true
-    }
-
-    if (codigo.length < 8) {
-      setErroCodigo('Código deve ter pelo menos 8 dígitos')
-      return false
-    }
-
     setValidandoCodigo(true)
     try {
       const existente = await buscarProdutoBasePropria(codigo)
-      if (!existente) {
-        setErroCodigo(null)
+      if (existente && existente.id !== produtoBaseId) {
+        setErroCodigo(`Código já pertence a "${existente.nome}"`)
         setValidandoCodigo(false)
-        return true
+        return false
       }
-      if (existente.id === produtoBaseId) {
-        setErroCodigo(null)
-        setValidandoCodigo(false)
-        return true
-      }
-      setErroCodigo(`Código já pertence a "${existente.nome}"`)
+      setErroCodigo(null)
       setValidandoCodigo(false)
-      return false
+      return true
     } catch (e) {
       setErroCodigo('Erro ao validar código')
       setValidandoCodigo(false)
@@ -160,10 +138,8 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     if (preco.trim() && precoNum === null) return alert('Preço inválido')
     if (somentePreco && precoNum === null) return alert('Informe o preço')
 
-    // 🔥 Só valida se o usuário ALTEROU o código (digitou algo diferente do original)
-    const codigoParaValidar = codigoBarras?.trim() || ''
-    if (codigoParaValidar && codigoParaValidar !== codigoOriginal) {
-      const valido = await validarCodigoBarras(codigoParaValidar)
+    if (codigoBarras.trim()) {
+      const valido = await validarCodigoBarras(codigoBarras.trim())
       if (!valido) return
     }
 
@@ -174,7 +150,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
         quantidade: v,
         unidade: unidadeQtd.trim() || 'un',
         categoria,
-        codigo: codigoParaValidar || null,
+        codigo: codigoBarras.trim() || null,
         preco: precoNum,
         oferta: precoNum != null && tipoOferta ? { tipo: tipoOferta, obs: obsOferta.trim() } : null,
       }
@@ -191,10 +167,10 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
         } catch (e) {
           console.warn('Erro ao atualizar na base própria:', e)
         }
-      } else if (codigoParaValidar) {
+      } else if (codigoBarras.trim()) {
         try {
           const id = await salvarProdutoBasePropria({
-            codigoBarras: codigoParaValidar,
+            codigoBarras: codigoBarras.trim(),
             nome: nome.trim(),
             marca: '',
             categoria,
@@ -383,7 +359,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
 
           <div>
             <label style={label}>Código de barras</label>
-            {carregandoCodigo ? (
+            {carregandoCodigo && editandoProdutoId ? (
               <div style={{ padding: '10px 12px', color: '#94a3b8' }}>🔍 Buscando código...</div>
             ) : (
               <input
@@ -391,21 +367,10 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                 inputMode="numeric"
                 value={codigoBarras}
                 onChange={e => {
-                  const val = e.target.value
-                  setCodigoBarras(val)
-                  // 🔥 Só valida se o usuário ALTEROU o campo
-                  if (val && val.trim().length >= 8 && val !== codigoOriginal) {
-                    validarCodigoBarras(val.trim())
-                  } else {
-                    setErroCodigo(null)
-                  }
+                  setCodigoBarras(e.target.value)
+                  setErroCodigo(null)
                 }}
-                onBlur={() => {
-                  const val = codigoBarras?.trim() || ''
-                  if (val && val.length >= 8 && val !== codigoOriginal) {
-                    validarCodigoBarras(val)
-                  }
-                }}
+                onBlur={() => { if (codigoBarras.trim()) validarCodigoBarras(codigoBarras.trim()) }}
                 onKeyDown={handleKeyDown}
                 style={{ ...inp, borderColor: erroCodigo ? '#ef4444' : '#e2e8f0' }}
                 placeholder="Digite ou escaneie o código de barras"
@@ -422,9 +387,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               </div>
             )}
             <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-              {codigoBarras && codigoBarras.trim() 
-                ? '✅ Produto com código — será salvo na base própria' 
-                : '⚠️ Sem código — NÃO será salvo na base própria'}
+              {codigoBarras.trim() ? '✅ Produto com código — será salvo na base própria' : '⚠️ Sem código — NÃO será salvo na base própria'}
             </div>
           </div>
 
