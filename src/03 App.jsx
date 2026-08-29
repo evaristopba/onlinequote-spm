@@ -7,10 +7,12 @@ import EntrarSala from './components/EntrarSala.jsx'
 import Sala from './components/Sala.jsx'
 import MinhasSalas from './components/MinhasSalas.jsx'
 import ManutencaoProdutos from './components/ManutencaoProdutos.jsx'
+import MigracaoProdutos from './components/MigracaoProdutos.jsx'
 
 function App() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState(null)
+  const [mostrarMigracao, setMostrarMigracao] = useState(false)
   const online = useOnline()
 
   useEffect(() => {
@@ -25,18 +27,33 @@ function App() {
       })
   }, [])
 
+  // 🔥 Atalho secreto: tecla M + Shift no teclado abre a migração
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'M' && e.shiftKey) {
+        e.preventDefault()
+        setMostrarMigracao(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   if (erro) return <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', alignItems: 'center', height: '100vh', padding: '0 24px', textAlign: 'center', color: '#64748b' }}><div style={{ fontSize: '1.5rem' }}>⚠️</div><p>Erro ao conectar ao Firebase.</p><p style={{ fontSize: '0.85rem' }}>{online ? 'Verifique .env e login anônimo.' : 'Você está sem internet. Reconecte e tente de novo.'}</p><button onClick={() => window.location.reload()} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#10b981', color: 'white', fontWeight: 700 }}>Tentar novamente</button></div>
   if (carregando) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#64748b' }}>Conectando...</div>
 
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/criar" element={<CriarSala />} />
-      <Route path="/entrar" element={<EntrarSala />} />
-      <Route path="/sala/:codigo" element={<Sala />} />
-      <Route path="/minhas-salas" element={<MinhasSalas />} />
-      <Route path="/manutencao" element={<ManutencaoProdutos />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/criar" element={<CriarSala />} />
+        <Route path="/entrar" element={<EntrarSala />} />
+        <Route path="/sala/:codigo" element={<Sala />} />
+        <Route path="/minhas-salas" element={<MinhasSalas />} />
+        <Route path="/manutencao" element={<ManutencaoProdutos />} />
+      </Routes>
+      {mostrarMigracao && <MigracaoProdutos onClose={() => setMostrarMigracao(false)} />}
+    </>
   )
 }
 
@@ -57,6 +74,8 @@ function Home() {
     </div>}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}><button onClick={() => nav('/criar')} style={btnPrim}>➕ Criar Nova Cotação</button><button onClick={() => nav('/entrar')} style={btnSec}>🔐 Entrar com Código</button><button onClick={() => nav('/minhas-salas')} style={btnLink}>🗂️ Minhas Salas</button><button onClick={() => nav('/manutencao')} style={btnLink}>🛠️ Manutenção de Produtos</button></div>
     <p style={{ marginTop: 24, fontSize: '0.8rem', color: '#94a3b8' }}>🌎 Brasil · Fuso: America/Sao_Paulo · Base Própria + Open Food Facts</p>
+    {/* 🔥 Atalho oculto: Pressione Shift + M para abrir a migração */}
+    <p style={{ marginTop: 12, fontSize: '0.6rem', color: '#e2e8f0', userSelect: 'none' }}>Shift+M</p>
   </div>
 }
 const btnPrim = { padding: '14px 24px', borderRadius: 10, border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '1rem' }
