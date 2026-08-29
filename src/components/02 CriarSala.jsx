@@ -19,12 +19,15 @@ export default function CriarSala() {
   const [carregando, setCarregando] = useState(false)
   const [buscando, setBuscando] = useState(false)
   
+  // 🔥 Autocomplete
   const [termoBusca, setTermoBusca] = useState('')
   const [sugestoes, setSugestoes] = useState([])
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false)
+  const [produtoSelecionado, setProdutoSelecionado] = useState(null)
   const inputRef = useRef(null)
   const sugestaoRef = useRef(null)
 
+  // 🔥 Busca sugestões quando digita
   useEffect(() => {
     if (termoBusca.length < 2) {
       setSugestoes([])
@@ -45,6 +48,7 @@ export default function CriarSala() {
     return () => clearTimeout(delay)
   }, [termoBusca])
 
+  // 🔥 Fecha sugestões ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (sugestaoRef.current && !sugestaoRef.current.contains(e.target) &&
@@ -57,9 +61,11 @@ export default function CriarSala() {
   }, [])
 
   const selecionarProduto = (produto) => {
-    const qtd = parseQuantidadeExistente(produto.quantidade)
+    setProdutoSelecionado(produto)
     setTermoBusca(produto.nome || '')
     setMostrarSugestoes(false)
+    // Abre o modal diretamente com os dados do produto
+    const qtd = parseQuantidadeExistente(produto.quantidade)
     setMostrarProdutoModal({
       titulo: '✅ Produto encontrado na base',
       aviso: `Este produto já está cadastrado como "${produto.nome}". Confirme para adicionar à cotação.`,
@@ -77,6 +83,7 @@ export default function CriarSala() {
   }
 
   const addManual = () => {
+    setProdutoSelecionado(null)
     setTermoBusca('')
     setMostrarSugestoes(false)
     setMostrarProdutoModal({
@@ -174,6 +181,7 @@ export default function CriarSala() {
     } else {
       setProdutos(p => [...p, novoProduto])
     }
+    setProdutoSelecionado(null)
     setTermoBusca('')
     setMostrarProdutoModal(null)
   }
@@ -208,6 +216,7 @@ export default function CriarSala() {
           </div>
         </div>
 
+        {/* 🔥 Autocomplete */}
         <div style={{ position: 'relative', marginBottom: 12 }}>
           <input
             ref={inputRef}
@@ -334,6 +343,7 @@ export default function CriarSala() {
           meuMercado={mercado.trim() || null}
           onConfirmar={handleConfirmarProduto}
           onCancelar={() => {
+            setProdutoSelecionado(null)
             setTermoBusca('')
             setMostrarProdutoModal(null)
           }}

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { formatarQuantidade, parseQuantidadeExistente, formatarInputPreco, parsePreco } from '../utils/ptBR.js'
 import { TIPOS_OFERTA } from '../utils/precos.js'
-import { buscarProdutosPorNome, buscarProdutoBasePropria, salvarProdutoBasePropria, editarProdutoBasePropria } from '../firebase.js'
+import { buscarProdutosPorNome, buscarProdutoBasePropria, salvarProdutoBasePropria } from '../firebase.js'
 
 const CATEGORIAS = ['Alimentos', 'Bebidas', 'Limpeza', 'Higiene', 'Frios e Laticínios', 'Padaria', 'Açougue', 'Outros']
 const UNIDADES = ['g', 'kg', 'ml', 'L', 'un', 'pct', 'cx', 'caixa', 'pacote']
@@ -18,30 +18,19 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
 
-  const [codigoBarras, setCodigoBarras] = useState(inicial?.codigo || '')
+  // 🔥 Código de barras - com validação de que é número
+  const codigoInicial = (() => {
+    const val = inicial?.codigo || ''
+    // Só aceita se for número com 8+ dígitos
+    if (/^\d{8,}$/.test(val)) return val
+    return ''
+  })()
+
+  const [codigoBarras, setCodigoBarras] = useState(codigoInicial)
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [erroCodigo, setErroCodigo] = useState(null)
-  const [produtoBaseId, setProdutoBaseId] = useState(inicial?.produtoBaseId || null)
 
-  // Busca o código na base própria se for edição dentro da sala
-  useEffect(() => {
-    const buscarCodigoNaBase = async () => {
-      if (inicial?.editandoProdutoId && !codigoBarras && inicial?.nome) {
-        try {
-          const resultados = await buscarProdutosPorNome(inicial.nome, 5)
-          const encontrado = resultados.find(p => p.nome === inicial.nome)
-          if (encontrado && encontrado.codigoBarras) {
-            setCodigoBarras(encontrado.codigoBarras)
-            setProdutoBaseId(encontrado.id)
-          }
-        } catch (e) {
-          console.warn('Erro ao buscar código na base:', e)
-        }
-      }
-    }
-    buscarCodigoNaBase()
-  }, [inicial?.editandoProdutoId, inicial?.nome])
-
+  // 🔥 Autocomplete
   const [termoBusca, setTermoBusca] = useState(inicial?.nome || '')
   const [sugestoes, setSugestoes] = useState([])
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false)
@@ -88,8 +77,8 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     setValorQtd(qtd.valor)
     setUnidadeQtd(produto.unidade || qtd.unidade || 'un')
     setCategoria(produto.categoria || 'Outros')
-    setCodigoBarras(produto.codigoBarras || '')
-    setProdutoBaseId(produto.id || null)
+    const codigo = produto.codigoBarras || ''
+    setCodigoBarras(/^\d{8,}$/.test(codigo) ? codigo : '')
     setMostrarSugestoes(false)
   }
 
@@ -101,7 +90,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     setValidandoCodigo(true)
     try {
       const existente = await buscarProdutoBasePropria(codigo)
-      if (existente && existente.id !== produtoBaseId) {
+      if (existente && existente.id !== inicial?.produtoBaseId) {
         setErroCodigo(`Código já pertence a "${existente.nome}"`)
         setValidandoCodigo(false)
         return false
@@ -141,21 +130,9 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
         oferta: precoNum != null && tipoOferta ? { tipo: tipoOferta, obs: obsOferta.trim() } : null,
       }
 
-      if (produtoBaseId) {
+      if (codigoBarras.trim() && !inicial?.editandoProdutoId) {
         try {
-          await editarProdutoBasePropria(produtoBaseId, {
-            nome: nome.trim(),
-            marca: '',
-            categoria,
-            quantidade: v,
-            unidade: unidadeQtd.trim() || 'un',
-          })
-        } catch (e) {
-          console.warn('Erro ao atualizar na base própria:', e)
-        }
-      } else if (codigoBarras.trim()) {
-        try {
-          const id = await salvarProdutoBasePropria({
+          await salvarProdutoBasePropria({
             codigoBarras: codigoBarras.trim(),
             nome: nome.trim(),
             marca: '',
@@ -164,7 +141,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             unidade: unidadeQtd.trim() || 'un',
             imagem: null,
           })
-          setProdutoBaseId(id)
+          console.log('✅ Produto salvo na base própria com código:', codigoBarras)
         } catch (e) {
           console.warn('Erro ao salvar na base própria:', e)
         }
@@ -344,7 +321,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
           </div>
 
           <div>
-            <label style={label}>Código de barras</label>
+            <label style={label}>Código de barras (opcional)</label>
             <input
               type="text"
               inputMode="numeric"
@@ -369,7 +346,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               </div>
             )}
             <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-              {codigoBarras.trim() ? '✅ Produto com código — será salvo na base própria' : '⚠️ Sem código — NÃO será salvo na base própria'}
+              {codigoBarras.trim() ? '✅ Produto será salvo na base própria' : '⚠️ Sem código, não será salvo na base própria'}
             </div>
           </div>
 
@@ -460,6 +437,12 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                   placeholder="Detalhe (ex: Clube Economia, leve 2 pague 1)"
                 />
               )}
+            </div>
+          )}
+
+          {inicial?.codigo && !codigoBarras && /^\d{8,}$/.test(inicial.codigo) && (
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+              📷 Código de barras original: {inicial.codigo}
             </div>
           )}
         </div>

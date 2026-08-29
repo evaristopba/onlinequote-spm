@@ -63,18 +63,27 @@ export const buscarProdutoBasePropria = async (codigoBarras) => {
   return { id: snap.docs[0].id, ...d }
 }
 
+// 🔥 NOVO: Busca produtos por nome (autocomplete) - VERSÃO CORRIGIDA
 export const buscarProdutosPorNome = async (termo, limite = 10) => {
   if (!db) throw new Error('Firebase nao inicializado')
   if (!termo || termo.length < 2) return []
+  
   const termoLower = termo.toLowerCase().trim()
+  
   try {
+    // Busca TODOS os produtos ativos (sem orderBy para evitar erro de índice)
     const qry = query(collection(db, 'produtos'), where('ativo', '==', true))
     const snap = await getDocs(qry)
+    
+    // Filtra manualmente no frontend (case insensitive)
     const resultados = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .filter(p => p.nome && p.nome.toLowerCase().includes(termoLower))
       .slice(0, limite)
+    
+    // Ordena por nome
     resultados.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    
     return resultados
   } catch (e) {
     console.error('Erro ao buscar produtos por nome:', e)
