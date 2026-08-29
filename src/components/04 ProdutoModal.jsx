@@ -69,12 +69,12 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               onChange={e => setNome(e.target.value)}
               onKeyDown={handleKeyDown}
               style={{ ...inp, background: somentePreco ? '#f8fafc' : 'white' }}
-              placeholder="Ex: Tapioca 500g"
+              placeholder="Ex: Arroz 5kg"
             />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
             <div style={{ flex: 1 }}>
-              <label style={label}>Peso / Volume do pacote</label>
+              <label style={label}>Quantidade</label>
               <input
                 type="text"
                 inputMode="decimal"
@@ -83,10 +83,10 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                 onChange={e => setValorQtd(e.target.value)}
                 onKeyDown={handleKeyDown}
                 style={{ ...inp, background: somentePreco ? '#f8fafc' : 'white' }}
-                placeholder="500"
+                placeholder="1,5"
               />
               <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-                Ex: 500 (para 500g) ou 1 (para 1 unidade)
+                Use vírgula ou ponto: 1,5 ou 1.5
               </div>
             </div>
             <div style={{ flex: 1 }}>
@@ -117,13 +117,13 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             </div>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#64748b', background: '#f8fafc', padding: '6px 10px', borderRadius: 6 }}>
-            📦 Tamanho do pacote: {qtdExibicao}
+            📦 {qtdExibicao}
           </div>
           {meuMercado && (
             <div>
               <label style={label}>
-                Preço do pacote em {meuMercado}
-                {somentePreco ? '' : ' (opcional — dá pra lançar depois)'}
+                Seu preço em {meuMercado}
+                {somentePreco ? '' : ' (opcional — dá pra lançar depois também)'}
               </label>
               <input
                 autoFocus={somentePreco}
@@ -134,9 +134,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                 style={inp}
                 placeholder="0,00"
               />
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-                Preço total do pacote (ex: R$ 2,50 para 500g)
-              </div>
             </div>
           )}
           {meuMercado && preco.trim() && (
