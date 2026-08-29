@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { formatarQuantidade, parseQuantidadeExistente, formatarInputPreco, parsePreco } from '../utils/ptBR.js'
 import { TIPOS_OFERTA } from '../utils/precos.js'
+import { buscarProdutosPorNome } from '../firebase.js'
 
 const CATEGORIAS = ['Alimentos', 'Bebidas', 'Limpeza', 'Higiene', 'Frios e Laticínios', 'Padaria', 'Açougue', 'Outros']
 const UNIDADES = ['g', 'kg', 'ml', 'L', 'un', 'pct', 'cx', 'caixa', 'pacote']
@@ -16,6 +17,60 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
   const [obsOferta, setObsOferta] = useState(inicial?.obsOferta || '')
   const [salvando, setSalvando] = useState(false)
   const somentePreco = !!inicial?.somentePreco
+
+  // 🔥 Autocomplete
+  const [termoBusca, setTermoBusca] = useState(inicial?.nome || '')
+  const [sugestoes, setSugestoes] = useState([])
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false)
+  const inputRef = useRef(null)
+  const sugestaoRef = useRef(null)
+
+  // 🔥 Só ativa autocomplete se for criação de novo produto (não edição, não somentePreco)
+  const habilitarAutocomplete = !somentePreco && !inicial?.editandoProdutoId && !inicial?.editandoIdx !== undefined
+
+  // 🔥 Busca sugestões quando digita
+  useEffect(() => {
+    if (!habilitarAutocomplete || termoBusca.length < 2) {
+      setSugestoes([])
+      setMostrarSugestoes(false)
+      return
+    }
+    const delay = setTimeout(async () => {
+      try {
+        const resultados = await buscarProdutosPorNome(termoBusca, 8)
+        setSugestoes(resultados)
+        setMostrarSugestoes(resultados.length > 0)
+      } catch (e) {
+        console.error('Erro ao buscar sugestões:', e)
+        setSugestoes([])
+        setMostrarSugestoes(false)
+      }
+    }, 300)
+    return () => clearTimeout(delay)
+  }, [termoBusca, habilitarAutocomplete])
+
+  // 🔥 Fecha sugestões ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (sugestaoRef.current && !sugestaoRef.current.contains(e.target) &&
+          inputRef.current && !inputRef.current.contains(e.target)) {
+        setMostrarSugestoes(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // 🔥 Seleciona um produto das sugestões
+  const selecionarProduto = (produto) => {
+    const qtd = parseQuantidadeExistente(produto.quantidade)
+    setNome(produto.nome || '')
+    setTermoBusca(produto.nome || '')
+    setValorQtd(qtd.valor)
+    setUnidadeQtd(produto.unidade || qtd.unidade || 'un')
+    setCategoria(produto.categoria || 'Outros')
+    setMostrarSugestoes(false)
+  }
 
   const handleConfirmar = async () => {
     if (!somentePreco && !nome.trim()) return
@@ -50,6 +105,78 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
 
   const qtdExibicao = formatarQuantidade(valorQtd, unidadeQtd)
 
+  // 🔥 Se for somente preço, não mostra autocomplete
+  if (somentePreco) {
+    return (
+      <div style={overlay}>
+        <div style={card}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '1.1rem' }}>{titulo}</h3>
+          {aviso && (
+            <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 8, padding: '10px 12px', fontSize: '0.82rem', marginBottom: 14 }}>
+              {aviso}
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={label}>Produto</label>
+              <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: '0.9rem' }}>
+                {inicial?.nome || 'Produto sem nome'}
+              </div>
+            </div>
+            <div>
+              <label style={label}>Preço em {meuMercado}</label>
+              <input
+                autoFocus
+                inputMode="decimal"
+                value={preco}
+                onChange={e => setPreco(e.target.value)}
+                onKeyDown={handleKeyDown}
+                style={inp}
+                placeholder="0,00"
+              />
+            </div>
+            {preco.trim() && (
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                <label style={label}>Esse preço depende de convênio/fidelidade?</label>
+                <select
+                  value={tipoOferta}
+                  onChange={e => setTipoOferta(e.target.value)}
+                  style={inp}
+                >
+                  <option value="">Não — preço normal para qualquer cliente</option>
+                  {TIPOS_OFERTA.map(t => (
+                    <option key={t} value={t}>Sim — {t}</option>
+                  ))}
+                </select>
+                {tipoOferta && (
+                  <input
+                    value={obsOferta}
+                    onChange={e => setObsOferta(e.target.value)}
+                    style={{ ...inp, marginTop: 8 }}
+                    placeholder="Detalhe (ex: Clube Economia, leve 2 pague 1)"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <button
+              onClick={handleConfirmar}
+              disabled={salvando}
+              style={{ ...btnPrim, opacity: salvando ? 0.6 : 1 }}
+            >
+              {salvando ? 'Salvando...' : '✓ Lançar preço'}
+            </button>
+            <button onClick={onCancelar} disabled={salvando} style={btnSec}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 🔥 Modal completo com autocomplete para criação/edição
   return (
     <div style={overlay}>
       <div style={card}>
@@ -62,15 +189,79 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label style={label}>Nome do produto</label>
-            <input
-              autoFocus={!somentePreco}
-              disabled={somentePreco}
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{ ...inp, background: somentePreco ? '#f8fafc' : 'white' }}
-              placeholder="Ex: Tapioca 500g"
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                ref={inputRef}
+                autoFocus
+                value={habilitarAutocomplete ? termoBusca : nome}
+                onChange={e => {
+                  const val = e.target.value
+                  if (habilitarAutocomplete) {
+                    setTermoBusca(val)
+                    setNome(val)
+                  } else {
+                    setNome(val)
+                  }
+                }}
+                onFocus={() => { if (habilitarAutocomplete && sugestoes.length > 0) setMostrarSugestoes(true) }}
+                onKeyDown={handleKeyDown}
+                style={{ ...inp, background: 'white' }}
+                placeholder="Ex: Tapioca 500g"
+                disabled={!habilitarAutocomplete && !!inicial?.editandoProdutoId}
+              />
+              {habilitarAutocomplete && mostrarSugestoes && sugestoes.length > 0 && (
+                <div
+                  ref={sugestaoRef}
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    zIndex: 100,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    marginTop: 4,
+                  }}
+                >
+                  {sugestoes.map((prod) => (
+                    <div
+                      key={prod.id}
+                      onClick={() => selecionarProduto(prod)}
+                      style={{
+                        padding: '10px 14px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #f1f5f9',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                      onMouseEnter={e => e.target.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.target.style.background = 'white'}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{prod.nome}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                          {prod.quantidade} {prod.unidade || 'un'} · {prod.categoria || 'Outros'}
+                          {prod.marca && ` · ${prod.marca}`}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 600, background: '#ecfdf5', padding: '2px 10px', borderRadius: 999 }}>
+                        já cadastrado
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {habilitarAutocomplete && (
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
+                💡 Digite para buscar produtos já cadastrados
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
             <div style={{ flex: 1 }}>
@@ -78,11 +269,10 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               <input
                 type="text"
                 inputMode="decimal"
-                disabled={somentePreco}
                 value={valorQtd}
                 onChange={e => setValorQtd(e.target.value)}
                 onKeyDown={handleKeyDown}
-                style={{ ...inp, background: somentePreco ? '#f8fafc' : 'white' }}
+                style={inp}
                 placeholder="500"
               />
               <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
@@ -92,10 +282,9 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             <div style={{ flex: 1 }}>
               <label style={label}>Unidade</label>
               <select
-                disabled={somentePreco}
                 value={unidadeQtd}
                 onChange={e => setUnidadeQtd(e.target.value)}
-                style={{ ...inp, background: somentePreco ? '#f8fafc' : 'white' }}
+                style={inp}
               >
                 {UNIDADES.map(u => (
                   <option key={u} value={u}>{u}</option>
@@ -106,7 +295,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               <label style={label}>Categoria</label>
               <select
                 value={categoria}
-                disabled={somentePreco}
                 onChange={e => setCategoria(e.target.value)}
                 style={inp}
               >
@@ -123,10 +311,9 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             <div>
               <label style={label}>
                 Preço do pacote em {meuMercado}
-                {somentePreco ? '' : ' (opcional — dá pra lançar depois)'}
+                {' (opcional — dá pra lançar depois)'}
               </label>
               <input
-                autoFocus={somentePreco}
                 inputMode="decimal"
                 value={preco}
                 onChange={e => setPreco(e.target.value)}
@@ -174,7 +361,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
             disabled={(!somentePreco && !nome.trim()) || salvando}
             style={{ ...btnPrim, opacity: ((!somentePreco && !nome.trim()) || salvando) ? 0.6 : 1 }}
           >
-            {salvando ? 'Salvando...' : (somentePreco ? '✓ Lançar preço' : '✓ Adicionar')}
+            {salvando ? 'Salvando...' : '✓ Adicionar'}
           </button>
           <button onClick={onCancelar} disabled={salvando} style={btnSec}>
             Cancelar
