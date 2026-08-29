@@ -48,9 +48,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
     }
   }
 
-  // Formata a quantidade para exibição ao vivo
-  const qtdExibicao = formatarQuantidade(valorQtd, unidadeQtd)
-
   return (
     <div style={overlay}>
       <div style={card}>
@@ -73,22 +70,19 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
               placeholder="Ex: Arroz 5kg"
             />
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'end' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1 }}>
               <label style={label}>Quantidade</label>
               <input
-                type="text"
-                inputMode="decimal"
+                type="number"
+                step="0.001"
+                min="0.001"
                 disabled={somentePreco}
                 value={valorQtd}
                 onChange={e => setValorQtd(e.target.value)}
                 onKeyDown={handleKeyDown}
                 style={{ ...inp, background: somentePreco ? '#f8fafc' : 'white' }}
-                placeholder="1,5"
               />
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
-                Use vírgula ou ponto: 1,5 ou 1.5
-              </div>
             </div>
             <div style={{ flex: 1 }}>
               <label style={label}>Unidade</label>
@@ -116,9 +110,6 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, onCon
                 ))}
               </select>
             </div>
-          </div>
-          <div style={{ fontSize: '0.8rem', color: '#64748b', background: '#f8fafc', padding: '6px 10px', borderRadius: 6 }}>
-            📦 {qtdExibicao}
           </div>
           {meuMercado && (
             <div>

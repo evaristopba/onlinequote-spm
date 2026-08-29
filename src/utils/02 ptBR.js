@@ -1,55 +1,13 @@
 export const formatarQuantidade = (v, u) => {
   const n = parseFloat(v)
-  if (isNaN(n)) return `1.000 ${u || 'un'}`
-  // Se for número inteiro, não mostra decimais desnecessários
-  if (Number.isInteger(n)) return `${n} ${u || 'un'}`
-  return `${n.toFixed(3).replace(/\.?0+$/, '')} ${u || 'un'}`
+  return `${isNaN(n) ? '1.000' : n.toFixed(3)} ${u || 'un'}`.trim()
 }
 
 export const parseQuantidadeExistente = (q) => {
   if (!q) return { valor: 1, unidade: 'un' }
-  const str = String(q).trim()
-  
-  // Tenta extrair número + unidade
-  const regex = /^([\d,.]+)\s*([a-zA-Z]{1,3})$/
-  const match = str.match(regex)
-  
-  let numeroStr = str
-  let unidade = 'un'
-  
-  if (match) {
-    numeroStr = match[1]
-    unidade = match[2].toLowerCase()
-  }
-  
-  // Converte número com vírgula OU ponto para float
-  // Regras:
-  // - Se tiver vírgula, substitui por ponto (1,5 → 1.5)
-  // - Se tiver ponto e depois 3 dígitos, provavelmente é separador de milhar (1.500 → 1500)
-  // - Se tiver ponto e depois 1 ou 2 dígitos, é decimal (1.5 → 1.5)
-  let numeroLimpo = numeroStr.replace(/[^\d,.]/g, '')
-  
-  // Se tiver vírgula, usa vírgula como separador decimal
-  if (numeroLimpo.includes(',')) {
-    // Remove pontos que podem ser separadores de milhar
-    const partes = numeroLimpo.split(',')
-    const parteInteira = partes[0].replace(/\./g, '')
-    const parteDecimal = partes[1] || ''
-    numeroLimpo = `${parteInteira}.${parteDecimal}`
-  } else if (numeroLimpo.includes('.')) {
-    // Verifica se o ponto é separador de milhar (ex: 1.500)
-    const partes = numeroLimpo.split('.')
-    // Se tiver 3 dígitos depois do ponto, provavelmente é milhar
-    if (partes.length === 2 && partes[1].length === 3) {
-      // 1.500 → 1500 (remove o ponto)
-      numeroLimpo = partes.join('')
-    }
-    // Se tiver 1 ou 2 dígitos depois do ponto, é decimal (1.5 → 1.5)
-    // Mantém como está
-  }
-  
-  const valor = parseFloat(numeroLimpo)
-  return { valor: isNaN(valor) ? 1 : valor, unidade }
+  const m = String(q).trim().match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/)
+  if (m) return { valor: parseFloat(m[1].replace(',', '.')) || 1, unidade: m[2] || 'un' }
+  return { valor: 1, unidade: String(q) }
 }
 
 export const formatarMoeda = (v) => {
@@ -63,12 +21,7 @@ export const formatarInputPreco = (v) => {
 }
 
 export const parsePreco = (v) => {
-  if (!v) return null
-  let str = String(v).replace(/[^\d,.]/g, '')
-  if (str.includes(',')) {
-    str = str.replace('.', '').replace(',', '.')
-  }
-  const n = parseFloat(str)
+  const n = parseFloat(String(v).replace(/[^\d,]/g, '').replace(',', '.'))
   return isNaN(n) || n <= 0 ? null : n
 }
 
