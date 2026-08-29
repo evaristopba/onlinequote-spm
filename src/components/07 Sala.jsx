@@ -219,7 +219,7 @@ export default function Sala() {
         quantidade: p.quantidade,
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
-        codigo: codigoEncontrado,
+        codigo: codigoEncontrado,  // 🔥 Agora passa o código correto
         preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
         tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
         obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',
