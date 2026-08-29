@@ -1,4 +1,4 @@
-import { formatarInputPreco, formatarPrecoPorUnidade, calcularPrecoPorUnidade, formatarMoeda } from '../utils/ptBR.js'
+import { formatarInputPreco, formatarPrecoPorUnidade, calcularPrecoPorUnidade } from '../utils/ptBR.js'
 import { infoPreco } from '../utils/precos.js'
 
 export default function TabelaCotacao({
