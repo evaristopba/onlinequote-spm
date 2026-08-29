@@ -3,7 +3,8 @@ import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } f
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
-  arrayUnion, collection, query, where, getDocs, addDoc, runTransaction
+  arrayUnion, collection, query, where, getDocs, addDoc, runTransaction,
+  orderBy, limit, startAt, endAt
 } from 'firebase/firestore'
 
 const cfg = {
@@ -63,31 +64,37 @@ export const buscarProdutoBasePropria = async (codigoBarras) => {
   return { id: snap.docs[0].id, ...d }
 }
 
-// 🔥 NOVO: Busca produtos por nome (autocomplete) - VERSÃO CORRIGIDA
+// 🔥 NOVO: Busca produtos por nome (autocomplete)
 export const buscarProdutosPorNome = async (termo, limite = 10) => {
   if (!db) throw new Error('Firebase nao inicializado')
   if (!termo || termo.length < 2) return []
   
   const termoLower = termo.toLowerCase().trim()
+  const termoUpper = termoLower.charAt(0).toUpperCase() + termoLower.slice(1)
+  
+  // Busca produtos ativos com nome começando com o termo
+  const qry = query(
+    collection(db, 'produtos'),
+    where('ativo', '==', true),
+    orderBy('nome'),
+    startAt(termoUpper),
+    endAt(termoUpper + '\uf8ff'),
+    limit(limite)
+  )
   
   try {
-    // Busca TODOS os produtos ativos (sem orderBy para evitar erro de índice)
-    const qry = query(collection(db, 'produtos'), where('ativo', '==', true))
     const snap = await getDocs(qry)
-    
-    // Filtra manualmente no frontend (case insensitive)
-    const resultados = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
-      .filter(p => p.nome && p.nome.toLowerCase().includes(termoLower))
-      .slice(0, limite)
-    
-    // Ordena por nome
-    resultados.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    
-    return resultados
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   } catch (e) {
-    console.error('Erro ao buscar produtos por nome:', e)
-    return []
+    // Fallback: se a busca com orderBy falhar (ex: índice não criado), busca sem ordenação
+    console.warn('Busca com orderBy falhou, usando fallback:', e)
+    const fallbackQry = query(collection(db, 'produtos'), where('ativo', '==', true), limit(limite * 2))
+    const snap = await getDocs(fallbackQry)
+    const resultados = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    // Filtra manualmente
+    return resultados.filter(p => 
+      p.nome && p.nome.toLowerCase().includes(termoLower)
+    ).slice(0, limite)
   }
 }
 
@@ -158,7 +165,7 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
     produtos: produtos.map((p, i) => ({
       id: `p${i}`,
       nome: p.nome,
-      quantidade: p.quantidade || 1,
+      quantidade: p.quantidade || '1.000 un',
       unidade: p.unidade || 'un',
       codigo: p.codigo || null,
       categoria: p.categoria || 'Outros',
