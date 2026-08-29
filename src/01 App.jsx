@@ -12,24 +12,14 @@ function App(){
   const[carregando,setCarregando]=useState(true)
   const[erro,setErro]=useState(null)
   const online=useOnline()
-
   useEffect(()=>{
-    // 🔥 NOVO: Verifica se ja existe um usuario anonimo persistido no localStorage
-    // Se existir, o Firebase ja vai reutilizar o mesmo UID automaticamente
-    // por causa do browserLocalPersistence configurado no loginAnonimo.
-    loginAnonimo()
-      .then(() => setCarregando(false))
-      .catch(e => {
-        // Se o erro for "auth/network-request-failed" ou similar,
-        // mas o usuario ja estava logado antes, nao travamos o app.
-        if (auth?.currentUser) {
-          setCarregando(false)
-          return
-        }
-        setErro(e)
-      })
-  }, [])
-
+    loginAnonimo().then(()=>setCarregando(false)).catch(e=>{
+      // Sem internet o login anônimo falha, mas a sessão anterior segue válida
+      // no cache — nesse caso entramos em modo offline em vez de travar na tela de erro.
+      if(auth?.currentUser){setCarregando(false);return}
+      setErro(e)
+    })
+  },[])
   if(erro)return<div style={{display:'flex',flexDirection:'column',gap:10,justifyContent:'center',alignItems:'center',height:'100vh',padding:'0 24px',textAlign:'center',color:'#64748b'}}><div style={{fontSize:'1.5rem'}}>⚠️</div><p>Erro ao conectar ao Firebase.</p><p style={{fontSize:'0.85rem'}}>{online?'Verifique .env e login anônimo.':'Você está sem internet. Reconecte e tente de novo.'}</p><button onClick={()=>window.location.reload()} style={{padding:'10px 20px',borderRadius:8,border:'none',background:'#10b981',color:'white',fontWeight:700}}>Tentar novamente</button></div>
   if(carregando)return<div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',color:'#64748b'}}>Conectando...</div>
   return<Routes><Route path="/" element={<Home/>}/><Route path="/criar" element={<CriarSala/>}/><Route path="/entrar" element={<EntrarSala/>}/><Route path="/sala/:codigo" element={<Sala/>}/><Route path="/minhas-salas" element={<MinhasSalas/>}/><Route path="/manutencao" element={<ManutencaoProdutos/>}/></Routes>

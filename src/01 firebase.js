@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } from 'firebase/auth'
+import { getAuth, signInAnonymously } from 'firebase/auth'
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
@@ -44,10 +44,7 @@ export { auth, db }
 
 export const loginAnonimo = () => {
   if (!auth) return Promise.reject(new Error('Firebase nao inicializado. Verifique o arquivo .env.'))
-  // 🔥 NOVO: Persiste o login anonimo no localStorage para manter o mesmo UID
-  // mesmo depois de fechar e reabrir o navegador.
-  return setPersistence(auth, browserLocalPersistence)
-    .then(() => signInAnonymously(auth))
+  return signInAnonymously(auth)
 }
 
 export const gerarCodigo = () => {
@@ -84,15 +81,15 @@ export const salvarProdutoBasePropria = async (dados) => {
   return docRef.id
 }
 
-// Lista os produtos ativos da base propria, pra tela de manutencao
+// Lista os produtos ativos da base própria, pra tela de manutenção
 export const listarBasePropria = async () => {
   if (!db) throw new Error('Firebase nao inicializado')
   const snap = await getDocs(collection(db, 'produtos'))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
-// Corrige dados de um produto ja cadastrado (nome, marca, categoria, quantidade, unidade).
-// Nao permite trocar o codigo de barras nem quem cadastrou (protegido pela regra tambem).
+// Corrige dados de um produto já cadastrado (nome, marca, categoria, quantidade, unidade).
+// Não permite trocar o código de barras nem quem cadastrou (protegido pela regra também).
 export const editarProdutoBasePropria = async (id, dados) => {
   if (!db) throw new Error('Firebase nao inicializado')
   await updateDoc(doc(db, 'produtos', id), {
@@ -104,8 +101,8 @@ export const editarProdutoBasePropria = async (id, dados) => {
   })
 }
 
-// Ativa/desativa um produto da base (soft-delete — mantem o historico,
-// so para de aparecer nas buscas por codigo de barras)
+// Ativa/desativa um produto da base (soft-delete — mantém o histórico,
+// só para de aparecer nas buscas por código de barras)
 export const definirAtivoBasePropria = async (id, ativo) => {
   if (!db) throw new Error('Firebase nao inicializado')
   await updateDoc(doc(db, 'produtos', id), { ativo })
@@ -191,7 +188,7 @@ export const lancarPreco = async (codigo, produtoId, mercado, preco, oferta = nu
   })
 }
 
-// Escuta a subcolecao de precos e monta o mesmo formato { produtoId: { mercado: preco } }
+// Escuta a subcoleção de precos e monta o mesmo formato { produtoId: { mercado: preco } }
 // que os componentes de tela ja esperam, entao nenhum componente precisa mudar.
 export const escutarPrecos = (codigo, cb) => {
   if (!db) {
@@ -220,8 +217,8 @@ function sanitizarId(s) {
   return String(s).trim().replace(/\//g, '_') || 'mercado'
 }
 
-// Edita um produto ja adicionado na sala (nome, quantidade, categoria).
-// Usa transacao pra nao perder concorrencia com outro participante adicionando
+// Edita um produto já adicionado na sala (nome, quantidade, categoria).
+// Usa transação pra não perder concorrência com outro participante adicionando
 // produto ao mesmo tempo (arrayUnion + overwrite bruto do array poderia colidir).
 export const editarProduto = async (codigo, produtoId, dadosNovos) => {
   if (!db) throw new Error('Firebase nao inicializado')
@@ -238,9 +235,9 @@ export const editarProduto = async (codigo, produtoId, dadosNovos) => {
   })
 }
 
-// Remove um produto da sala e limpa os precos associados (best-effort —
-// se algum preco de outro mercado nao puder ser apagado por permissao,
-// fica orfao na subcolecao, mas nunca mais aparece na tela).
+// Remove um produto da sala e limpa os preços associados (best-effort —
+// se algum preço de outro mercado não puder ser apagado por permissão,
+// fica órfão na subcoleção, mas nunca mais aparece na tela).
 export const removerProduto = async (codigo, produtoId) => {
   if (!db) throw new Error('Firebase nao inicializado')
   try {
@@ -269,9 +266,9 @@ export const adicionarProduto = async (codigo, nome, quantidade, codigoBarras = 
   return id
 }
 
-// Lista as salas onde o usuario logado participa (inclui salas antigas,
+// Lista as salas onde o usuário logado participa (inclui salas antigas,
 // criadas antes do campo criadorUid existir — nelas, qualquer participante
-// conta como "dono" pra fins de limpeza, ja que nao da pra saber quem criou)
+// conta como "dono" pra fins de limpeza, ja que não da pra saber quem criou)
 export const listarMinhasSalas = async () => {
   if (!db || !auth?.currentUser) throw new Error('Nao autenticado')
   const uid = auth.currentUser.uid
