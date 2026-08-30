@@ -115,6 +115,50 @@ export const editarProdutoBasePropria = async (id, dados) => {
   })
 }
 
+export const buscarProdutoPorId = async (id) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  const snap = await getDoc(doc(db, 'produtos', id))
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null
+}
+
+// Liga dois produtos da base própria como "variantes" um do outro (mesmo
+// produto, tamanho/embalagem diferente — ex: creme dental 75g e 180g).
+// Usa um campo compartilhado `grupoVariante`: se um dos dois já pertence
+// a um grupo, o outro entra nesse grupo; se os dois já tiverem grupos
+// DIFERENTES (cada um já linkado com outros produtos), os dois grupos
+// são fundidos em um só, pra não perder vínculos já feitos.
+export const vincularVariante = async (idA, idB) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  if (idA === idB) throw new Error('Selecione dois produtos diferentes')
+  const [snapA, snapB] = await Promise.all([
+    getDoc(doc(db, 'produtos', idA)),
+    getDoc(doc(db, 'produtos', idB)),
+  ])
+  if (!snapA.exists() || !snapB.exists()) throw new Error('Produto não encontrado')
+  const grupoA = snapA.data().grupoVariante || null
+  const grupoB = snapB.data().grupoVariante || null
+
+  if (grupoA && grupoB && grupoA !== grupoB) {
+    const qGrupoB = query(collection(db, 'produtos'), where('grupoVariante', '==', grupoB))
+    const snapGrupoB = await getDocs(qGrupoB)
+    await Promise.all(snapGrupoB.docs.map((d) => updateDoc(d.ref, { grupoVariante: grupoA })))
+    return grupoA
+  }
+
+  const grupo = grupoA || grupoB || `grp_${idA}`
+  await Promise.all([
+    updateDoc(doc(db, 'produtos', idA), { grupoVariante: grupo }),
+    updateDoc(doc(db, 'produtos', idB), { grupoVariante: grupo }),
+  ])
+  return grupo
+}
+
+// Remove só este produto do grupo de variantes (os outros continuam ligados).
+export const desvincularVariante = async (id) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  await updateDoc(doc(db, 'produtos', id), { grupoVariante: null })
+}
+
 export const definirAtivoBasePropria = async (id, ativo) => {
   if (!db) throw new Error('Firebase nao inicializado')
   await updateDoc(doc(db, 'produtos', id), { ativo })

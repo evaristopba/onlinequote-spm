@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria } from '../firebase.js'
+import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria, listarBasePropria } from '../firebase.js'
 import { parsePreco, formatarDataRelativa } from '../utils/ptBR.js'
 import { buscarProdutoPorCodigo } from '../utils/barcode.js'
 import { infoPreco } from '../utils/precos.js'
 import { useOnline, salvarUltimaSala, limparUltimaSala } from '../utils/conexao.js'
 import TabelaCotacao from './TabelaCotacao.jsx'
 import ListaOtimizada from './ListaOtimizada.jsx'
+import VariantesComparacao from './VariantesComparacao.jsx'
 import Participantes from './Participantes.jsx'
 import BarcodeScanner from './BarcodeScanner.jsx'
 import CadastrarProduto from './CadastrarProduto.jsx'
@@ -27,6 +28,14 @@ export default function Sala() {
   const [buscando, setBuscando] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
   const [aba, setAba] = useState('todos')
+  const [baseProdutos, setBaseProdutos] = useState([])
+
+  useEffect(() => {
+    listarBasePropria().then(setBaseProdutos).catch((e) => {
+      console.warn('Não foi possível carregar a base para comparar variantes:', e)
+      setBaseProdutos([])
+    })
+  }, [])
 
   useEffect(() => {
     const unsub = escutarSala(codigo, (d) => {
@@ -52,6 +61,13 @@ export default function Sala() {
   }, [codigo, sala?.nome])
 
   const mercados = useMemo(() => sala ? [...new Set(Object.values(sala.participantes || {}).map(p => p.mercado))] : [], [sala])
+  const grupoPorCodigo = useMemo(() => {
+    const mapa = {}
+    baseProdutos.forEach((b) => {
+      if (b.codigoBarras && b.grupoVariante) mapa[b.codigoBarras] = b.grupoVariante
+    })
+    return mapa
+  }, [baseProdutos])
   const produtos = sala?.produtos || []
   const completos = useMemo(() => {
     if (mercados.length === 0) return []
@@ -264,6 +280,7 @@ export default function Sala() {
           vazioTexto={aba === 'completos' ? 'Nenhum produto ainda tem preço em todos os mercados.' : 'Nenhum produto na cotação. Use 📷 Escanear ou ➕ Manual.'}
         />
       </div>
+      <VariantesComparacao produtos={sala.produtos} precos={precos} mercados={mercados} grupoPorCodigo={grupoPorCodigo} />
       <ListaOtimizada produtos={sala.produtos} precos={precos} participantes={sala.participantes} />
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
       {mostrarScanner && <BarcodeScanner onScan={handleScan} onClose={() => setMostrarScanner(false)} />}
