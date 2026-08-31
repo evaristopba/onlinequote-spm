@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } from 'firebase/auth'
+import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
@@ -42,8 +42,66 @@ export { auth, db }
 
 export const loginAnonimo = () => {
   if (!auth) return Promise.reject(new Error('Firebase nao inicializado. Verifique o arquivo .env.'))
+  // Se já existe uma sessão (anônima OU de admin logado com e-mail/senha),
+  // não sobrescreve — signInAnonymously() trocaria até uma sessão de admin
+  // por uma anônima nova sem avisar. Quem decide QUANDO chamar isso é o
+  // App.jsx, via observarAuth().
+  if (auth.currentUser) return Promise.resolve(auth.currentUser)
   return setPersistence(auth, browserLocalPersistence)
     .then(() => signInAnonymously(auth))
+}
+
+// Observa mudanças de sessão (login/logout, restauração ao abrir o app).
+// Usado pelo App.jsx pra decidir se precisa logar anônimo ou se já existe
+// uma sessão válida (inclusive uma sessão de admin persistida).
+export const observarAuth = (cb) => {
+  if (!auth) return () => {}
+  return onAuthStateChanged(auth, cb)
+}
+
+// ===== Painel Admin (login real, e-mail/senha) =====
+// O admin é reconhecido por um documento em admins/{uid} — cada usuário
+// só pode ler o PRÓPRIO documento (pra souAdmin() conferir), nunca
+// escrever nada ali (isso só é feito manualmente no Firebase Console).
+export const loginAdmin = (email, senha) => {
+  if (!auth) return Promise.reject(new Error('Firebase nao inicializado'))
+  return signInWithEmailAndPassword(auth, email, senha)
+}
+
+export const logoutAdmin = async () => {
+  if (!auth) return
+  await signOut(auth)
+  await loginAnonimo()
+}
+
+export const souAdmin = async () => {
+  if (!db || !auth?.currentUser) return false
+  try {
+    const snap = await getDoc(doc(db, 'admins', auth.currentUser.uid))
+    return snap.exists()
+  } catch (e) {
+    return false
+  }
+}
+
+// Lista TODAS as salas do banco (não só as do usuário atual) — só
+// funciona de verdade se as regras permitirem o delete/gerência pra
+// quem chama; usada pelo painel admin.
+export const listarTodasSalas = async () => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  const snap = await getDocs(collection(db, 'salas'))
+  return snap.docs.map((d) => ({ codigo: d.id, ...d.data() }))
+}
+
+// Apaga um produto DE VEZ da base própria (diferente de
+// definirAtivoBasePropria, que só desativa). Só admins conseguem — a
+// regra do Firestore bloqueia isso pra qualquer outro usuário. Não
+// verifica se o produto está referenciado em cotações ativas; se
+// estiver, essas cotações passam a mostrar um item "órfão" (sem
+// cadastro na base) — use com cuidado.
+export const apagarProdutoDeVez = async (id) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  await deleteDoc(doc(db, 'produtos', id))
 }
 
 export const gerarCodigo = () => {

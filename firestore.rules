@@ -41,10 +41,14 @@ service cloud.firestore {
 
       // Quem criou a sala pode excluí-la. Salas antigas (criadas antes do
       // campo criadorUid existir) não têm como saber quem criou — nesse
-      // caso, qualquer participante da sala pode excluí-la.
+      // caso, qualquer participante da sala pode excluí-la. Um admin
+      // (ver coleção `admins` no fim deste arquivo) pode excluir QUALQUER
+      // sala — é a válvula de escape pra sala "órfã" (criador que perdeu
+      // a sessão anônima e nunca mais consegue apagar sozinho).
       allow delete: if request.auth != null && (
         ('criadorUid' in resource.data && resource.data.criadorUid == request.auth.uid)
         || (!('criadorUid' in resource.data) && request.auth.uid in resource.data.participantes)
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
 
       // ============================================
@@ -118,8 +122,25 @@ service cloud.firestore {
           || (request.resource.data.grupoVariante is string && request.resource.data.grupoVariante.size() <= 60)
         );
 
-      // Não permite apagar — usa o campo "ativo" pra desativar sem perder histórico
-      allow delete: if false;
+      // Não permite apagar — usa o campo "ativo" pra desativar sem perder
+      // histórico. Exceção: um admin (ver coleção `admins` no fim deste
+      // arquivo) pode apagar de vez, usado pra limpar lixo/duplicados
+      // que "desativar" sozinho não resolve.
+      allow delete: if request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ============================================
+    // COLEÇÃO: admins
+    // Marca quem é administrador — documento com ID = uid do admin.
+    // Cada usuário só pode ler o PRÓPRIO documento (pra souAdmin() saber
+    // se é admin) — nunca a lista inteira, e nunca escrever nada aqui.
+    // É gerenciada só pelo Firebase Console (Firestore Database → criar
+    // documento admins/<uid>) ou Admin SDK, nunca pelo client SDK.
+    // ============================================
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
     }
 
   }

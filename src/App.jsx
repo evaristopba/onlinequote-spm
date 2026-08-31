@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, useNavigate } from 'react-router-dom'
-import { loginAnonimo, auth } from './firebase.js'
+import { loginAnonimo, observarAuth, auth } from './firebase.js'
 import { useOnline, lerUltimaSala, limparUltimaSala } from './utils/conexao.js'
 import CriarSala from './components/CriarSala.jsx'
 import EntrarSala from './components/EntrarSala.jsx'
 import Sala from './components/Sala.jsx'
 import MinhasSalas from './components/MinhasSalas.jsx'
 import ManutencaoProdutos from './components/ManutencaoProdutos.jsx'
+import Admin from './components/Admin.jsx'
 
 function App() {
   const [carregando, setCarregando] = useState(true)
@@ -14,15 +15,27 @@ function App() {
   const online = useOnline()
 
   useEffect(() => {
-    loginAnonimo()
-      .then(() => setCarregando(false))
-      .catch(e => {
-        if (auth?.currentUser) {
-          setCarregando(false)
-          return
-        }
-        setErro(e)
-      })
+    // Observa a sessão em vez de logar anônimo direto: se já existe uma
+    // sessão restaurada (anônima OU de admin logado com e-mail/senha),
+    // não mexe nela. Só loga anônimo quando realmente não há ninguém —
+    // assim o admin não é derrubado pra uma sessão anônima nova toda
+    // vez que recarrega a página.
+    const unsub = observarAuth((user) => {
+      if (user) {
+        setCarregando(false)
+        return
+      }
+      loginAnonimo()
+        .then(() => setCarregando(false))
+        .catch(e => {
+          if (auth?.currentUser) {
+            setCarregando(false)
+            return
+          }
+          setErro(e)
+        })
+    })
+    return () => unsub()
   }, [])
 
   if (erro) return <div style={{ display: 'flex', flexDirection: 'column', gap: 10, justifyContent: 'center', alignItems: 'center', height: '100vh', padding: '0 24px', textAlign: 'center', color: '#64748b' }}><div style={{ fontSize: '1.5rem' }}>⚠️</div><p>Erro ao conectar ao Firebase.</p><p style={{ fontSize: '0.85rem' }}>{online ? 'Verifique .env e login anônimo.' : 'Você está sem internet. Reconecte e tente de novo.'}</p><button onClick={() => window.location.reload()} style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#10b981', color: 'white', fontWeight: 700 }}>Tentar novamente</button></div>
@@ -36,6 +49,7 @@ function App() {
       <Route path="/sala/:codigo" element={<Sala />} />
       <Route path="/minhas-salas" element={<MinhasSalas />} />
       <Route path="/manutencao" element={<ManutencaoProdutos />} />
+      <Route path="/admin" element={<Admin />} />
     </Routes>
   )
 }

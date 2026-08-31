@@ -48,9 +48,10 @@ firebase deploy --only firestore:rules
 
 | Coleção | Read | Create | Update | Delete |
 |---|---|---|---|---|
-| `salas` | ✅ Autenticado | ✅ Autenticado | ✅ Autenticado, mas só a **própria** entrada em `participantes` OU o array `produtos` — nunca o documento inteiro (impede sequestro de sala e falsificação de participante/mercado alheio) | ✅ Só quem criou a sala (ou qualquer participante, em salas antigas de antes do campo `criadorUid`) |
+| `salas` | ✅ Autenticado | ✅ Autenticado | ✅ Autenticado, mas só a **própria** entrada em `participantes` OU o array `produtos` — nunca o documento inteiro (impede sequestro de sala e falsificação de participante/mercado alheio) | ✅ Só quem criou a sala (ou qualquer participante, em salas antigas de antes do campo `criadorUid`), **ou um admin** |
 | `salas/{id}/precos` | ✅ Autenticado | ✅ Autenticado (campos validados) | ✅ Autenticado (campos validados, só o dono daquele mercado) | ✅ Dono do mercado, ou quem pode excluir a sala inteira |
-| `produtos` | ✅ Autenticado | ✅ Autenticado (com validação) | ✅ Autenticado — só `nome`, `marca`, `categoria`, `quantidade`, `unidade`, `ativo` e `grupoVariante` (nunca `codigoBarras` nem quem cadastrou) | ❌ Não permitido |
+| `produtos` | ✅ Autenticado | ✅ Autenticado (com validação) | ✅ Autenticado — só `nome`, `marca`, `categoria`, `quantidade`, `unidade`, `ativo` e `grupoVariante` (nunca `codigoBarras` nem quem cadastrou) | ❌ Ninguém apaga de vez, **exceto um admin** (uso normal continua sendo "desativar") |
+| `admins` | ✅ Só o próprio (`admins/<meu uid>`) | ❌ | ❌ | ❌ (gerenciado só pelo Firebase Console) |
 
 Os campos aceitos em `precos` incluem `preco`, `oferta`, `tipoOferta` e `obsOferta`.
 
@@ -66,6 +67,19 @@ npm run dev
 npm i -g vercel
 vercel --prod
 ```
+
+### 7. Criar o admin (opcional, mas recomendado)
+
+O painel administrativo (`/admin`) permite excluir **qualquer** sala do banco (não só a que você criou) e apagar produtos de vez da base própria — pra quando "desativar" não é suficiente ou o criador da sala perdeu a sessão anônima e ninguém mais consegue apagar. Não tem link visível em nenhuma tela — só é acessível digitando a URL.
+
+1. Firebase Console → **Authentication** → ative o método **E-mail/Senha**
+2. Ainda em Authentication → **Users** → **Add user** → crie um usuário só seu (esse é o admin)
+3. Copie o **User UID** desse usuário
+4. Firebase Console → **Firestore Database** → crie uma coleção chamada **`admins`** → crie um documento cujo **ID seja exatamente esse UID** (o conteúdo do documento pode ficar vazio)
+5. Publique o `firestore.rules` deste projeto (ele já reconhece essa coleção)
+6. Acesse `suaurl.vercel.app/admin` e entre com o e-mail/senha criados no passo 2
+
+> Sem esse setup, a rota `/admin` mostra a tela de login mas ninguém consegue fazer nada nela — as regras do Firestore bloqueiam qualquer exclusão de sala alheia ou remoção definitiva de produto pra quem não tiver um documento em `admins/<uid>`.
 
 ---
 
@@ -178,6 +192,7 @@ src/
     ├── VincularVariante.jsx     # vincular/desvincular tamanhos do mesmo produto
     ├── MinhasSalas.jsx
     ├── MigracaoProdutos.jsx
+    ├── Admin.jsx             # painel restrito (excluir qualquer sala, apagar produto de vez)
     └── ErrorBoundary.jsx
 ```
 
