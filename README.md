@@ -48,13 +48,13 @@ firebase deploy --only firestore:rules
 
 | Coleção | Read | Create | Update | Delete |
 |---|---|---|---|---|
-| `salas` | ✅ Autenticado | ✅ Autenticado | ✅ Autenticado (validado) | ✅ Autenticado |
-| `salas/{id}/precos` | ✅ Autenticado | ✅ Autenticado (campos validados) | ✅ Autenticado (campos validados) | ❌ |
-| `produtos` | ✅ Autenticado | ✅ Autenticado (com validação) | ❌ Não permitido | ❌ Não permitido |
+| `salas` | ✅ Autenticado | ✅ Autenticado | ✅ Autenticado, mas só a **própria** entrada em `participantes` OU o array `produtos` — nunca o documento inteiro (impede sequestro de sala e falsificação de participante/mercado alheio) | ✅ Só quem criou a sala (ou qualquer participante, em salas antigas de antes do campo `criadorUid`) |
+| `salas/{id}/precos` | ✅ Autenticado | ✅ Autenticado (campos validados) | ✅ Autenticado (campos validados, só o dono daquele mercado) | ✅ Dono do mercado, ou quem pode excluir a sala inteira |
+| `produtos` | ✅ Autenticado | ✅ Autenticado (com validação) | ✅ Autenticado — só `nome`, `marca`, `categoria`, `quantidade`, `unidade`, `ativo` e `grupoVariante` (nunca `codigoBarras` nem quem cadastrou) | ❌ Não permitido |
 
 Os campos aceitos em `precos` incluem `preco`, `oferta`, `tipoOferta` e `obsOferta`.
 
-> **Por que produtos não pode editar/apagar?** Para proteger a base própria. Uma vez cadastrado, o produto fica disponível para todos. Correções podem ser feitas pelo Firebase Console.
+> **Por que `codigoBarras` não pode ser alterado?** Pra proteger a base própria: é a chave que liga o produto físico ao cadastro, então corrigi-lo por engano quebraria o histórico de cotações antigas. Correções desse campo específico exigem o Firebase Console. Todo o resto (nome, categoria, quantidade, variantes) pode ser corrigido direto pela tela de Manutenção.
 
 ### 5. Rodar local
 ```bash
@@ -124,6 +124,20 @@ Na tela da sala há duas visões da tabela:
 
 ---
 
+## 🔁 Comparar tamanhos/embalagens (novo)
+
+Pra decidir se compensa levar 1 pacote grande em vez de 2 pequenos (ex.: creme dental 75g vs 180g), vincule os dois na base própria:
+
+1. **🛠️ Manutenção de Produtos** → ache o produto → **🔗 Variante** → busque o outro tamanho pelo nome e vincule
+2. O vínculo (`grupoVariante`) fica salvo na base — não precisa refazer em cada cotação
+3. Quando os dois produtos vinculados estiverem na **mesma cotação** e já tiverem **pelo menos um preço lançado**, aparece o bloco **"🔁 Comparar tamanhos/embalagens"** na tela da sala, com o custo por kg/L de cada um lado a lado e o mais em conta destacado
+
+Pra desvincular, use **✂️ Desvincular** na Manutenção. Vincular um produto que já tem outra variante a um terceiro funde os grupos automaticamente, sem perder nenhum vínculo já feito.
+
+> É um vínculo **manual** por escolha — o app não tenta adivinhar por semelhança de nome, porque isso arriscaria juntar produtos diferentes por engano.
+
+---
+
 ## 🎮 Como usar
 
 1. **Criar:** escaneia/adiciona produtos → código `#X7K9P2`
@@ -140,8 +154,9 @@ Na tela da sala há duas visões da tabela:
 src/
 ├── main.jsx
 ├── App.jsx                  # + botão "Retomar sala"
-├── firebase.js              # base própria + cache offline persistente
+├── firebase.js              # base própria + variantes + cache offline persistente
 ├── index.css
+├── migrarProdutos.js
 ├── utils/
 │   ├── ptBR.js
 │   ├── barcode.js
@@ -150,16 +165,19 @@ src/
 └── components/
     ├── CriarSala.jsx        # Busca híbrida
     ├── EntrarSala.jsx
-    ├── Sala.jsx             # anti-duplicação, abas, aviso offline
+    ├── Sala.jsx             # anti-duplicação, abas, aviso offline, comparação de variantes
     ├── TabelaCotacao.jsx    # selos de oferta + aba cotação completa
     ├── ListaOtimizada.jsx   # agrupamento por categoria + selos
+    ├── VariantesComparacao.jsx  # comparação de custo por kg/L entre tamanhos vinculados
     ├── Participantes.jsx
     ├── BarcodeScanner.jsx
     ├── ProdutoModal.jsx     # lançamento de preço + oferta
     ├── CadastrarProduto.jsx
     ├── ManutencaoProdutos.jsx
     ├── EditarProdutoBase.jsx
+    ├── VincularVariante.jsx     # vincular/desvincular tamanhos do mesmo produto
     ├── MinhasSalas.jsx
+    ├── MigracaoProdutos.jsx
     └── ErrorBoundary.jsx
 ```
 
@@ -167,4 +185,4 @@ src/
 
 ## 🗒️ Pendências mapeadas
 
-- **Produtos similares:** indicar equivalentes entre marcas/embalagens (agrupamento na base própria) — ainda não implementado.
+Nenhuma pendência mapeada no momento. (A antiga pendência de "produtos similares" foi implementada — veja **🔁 Comparar tamanhos/embalagens** acima.)

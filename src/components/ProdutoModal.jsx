@@ -27,34 +27,52 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, edita
   const [carregandoCodigo, setCarregandoCodigo] = useState(false)
 
   // Carrega o código de barras já existente ao editar um produto da sala.
-  // A fonte da verdade é sempre `inicial.codigo` (o código já associado a
-  // esse item específico) — nunca uma busca por nome, que não é único e
-  // pode trazer o código de barras de outro produto. Aqui só confirmamos
-  // se esse código ainda existe na base própria, pra saber se é uma
-  // edição (produtoBaseId preenchido) ou um código "solto".
+  // Prioridade 1: `inicial.codigo`, mas só se tiver "cara" de código de
+  // barras de verdade (só dígitos, 8-14 caracteres) — isso descarta lixo
+  // que ficou gravado por versões antigas com bug (ex.: texto de
+  // categoria salvo no lugar do código).
+  // Prioridade 2 (fallback, só quando não há código salvo ou o valor é
+  // lixo): busca por NOME na base — mas só usa o resultado se for um
+  // match EXATO e ÚNICO (nome idêntico e um só produto ativo com esse
+  // nome). Nome não é chave única, então qualquer ambiguidade (0 ou 2+
+  // resultados) deixa o campo em branco pra digitação manual em vez de
+  // arriscar trazer o código de outro produto.
   useEffect(() => {
+    const pareceCodigoDeBarras = (s) => /^\d{8,14}$/.test(String(s || '').trim())
+
     const carregarCodigoExistente = async () => {
       if (!editandoProdutoId || somentePreco) return
-      const codigoDoProduto = inicial?.codigo || ''
-      if (!codigoDoProduto) {
+      const codigoSalvo = inicial?.codigo || ''
+      setCarregandoCodigo(true)
+      try {
+        if (codigoSalvo && pareceCodigoDeBarras(codigoSalvo)) {
+          const encontrado = await buscarProdutoBasePropria(codigoSalvo)
+          setCodigoBarras(codigoSalvo)
+          setCodigoOriginal(codigoSalvo)
+          setProdutoBaseId(encontrado?.id || null)
+          return
+        }
+        if (inicial?.nome) {
+          const resultados = await buscarProdutosPorNome(inicial.nome, 10)
+          const exatos = resultados.filter(p => p.nome === inicial.nome && p.codigoBarras)
+          if (exatos.length === 1) {
+            setCodigoBarras(exatos[0].codigoBarras)
+            setCodigoOriginal(exatos[0].codigoBarras)
+            setProdutoBaseId(exatos[0].id)
+            return
+          }
+        }
         setCodigoBarras('')
         setCodigoOriginal('')
         setProdutoBaseId(null)
-        return
-      }
-      setCarregandoCodigo(true)
-      try {
-        const encontrado = await buscarProdutoBasePropria(codigoDoProduto)
-        setCodigoBarras(codigoDoProduto)
-        setCodigoOriginal(codigoDoProduto)
-        setProdutoBaseId(encontrado?.id || null)
       } catch (e) {
-        console.warn('Erro ao validar código na base:', e)
-        setCodigoBarras(codigoDoProduto)
-        setCodigoOriginal(codigoDoProduto)
+        console.warn('Erro ao carregar código de barras:', e)
+        setCodigoBarras('')
+        setCodigoOriginal('')
         setProdutoBaseId(null)
+      } finally {
+        setCarregandoCodigo(false)
       }
-      setCarregandoCodigo(false)
     }
     carregarCodigoExistente()
     // eslint-disable-next-line react-hooks/exhaustive-deps
