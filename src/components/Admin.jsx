@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   loginAdmin, logoutAdmin, souAdmin,
-  listarTodasSalas, excluirSala,
+  listarTodasSalas, excluirSala, removerParticipanteAdmin,
   listarBasePropria, apagarProdutoDeVez, definirAtivoBasePropria,
 } from '../firebase.js'
 import { formatarDataRelativa } from '../utils/ptBR.js'
@@ -25,6 +25,8 @@ export default function Admin() {
   const [buscaProduto, setBuscaProduto] = useState('')
   const [excluindoCodigo, setExcluindoCodigo] = useState(null)
   const [apagandoId, setApagandoId] = useState(null)
+  const [salaExpandida, setSalaExpandida] = useState(null)
+  const [removendoUid, setRemovendoUid] = useState(null)
 
   const verificar = async () => {
     setStatus('verificando')
@@ -106,6 +108,24 @@ export default function Admin() {
     }
   }
 
+  const handleRemoverParticipante = async (codigo, p) => {
+    const ok = await confirmar(`Remover "${p.nome} — ${p.mercado}" dessa sala?\n\nOs preços já lançados por esse mercado NÃO são apagados — se alguém entrar de novo com esse mesmo nome/mercado, volta a editar a mesma coluna.`, { titulo: 'Remover participante', textoConfirmar: 'Remover', perigo: true })
+    if (!ok) return
+    setRemovendoUid(p.uid)
+    try {
+      await removerParticipanteAdmin(codigo, p.uid)
+      setSalas(ss => ss.map(s => {
+        if (s.codigo !== codigo) return s
+        const participantes = { ...s.participantes }
+        delete participantes[p.uid]
+        return { ...s, participantes }
+      }))
+    } catch (e) {
+      avisar('Erro ao remover: ' + e.message)
+    }
+    setRemovendoUid(null)
+  }
+
   const produtosFiltrados = (produtos || []).filter(p => {
     if (!buscaProduto.trim()) return true
     const b = buscaProduto.toLowerCase()
@@ -152,18 +172,38 @@ export default function Admin() {
           {salas === null && <p style={{ color: '#64748b', textAlign: 'center' }}>Carregando...</p>}
           {salas && salas.length === 0 && <p style={{ color: '#94a3b8', textAlign: 'center' }}>Nenhuma sala no banco.</p>}
           {salas && salas.map(s => (
-            <div key={s.codigo} style={card}>
-              <div>
-                <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#f59e0b', letterSpacing: 1 }}>#{s.codigo}</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{s.nome}</div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                  Criada {formatarDataRelativa(s.criadoEm)} · {Object.keys(s.participantes || {}).length} participante(s) · {(s.produtos || []).length} produto(s)
-                  {!('criadorUid' in s) && <span style={{ marginLeft: 6, color: '#f59e0b' }}>· sem criador registrado</span>}
+            <div key={s.codigo} style={{ ...card, flexDirection: 'column', alignItems: 'stretch' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div>
+                  <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#f59e0b', letterSpacing: 1 }}>#{s.codigo}</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{s.nome}</div>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                    Criada {formatarDataRelativa(s.criadoEm)} · {Object.keys(s.participantes || {}).length} participante(s) · {(s.produtos || []).length} produto(s)
+                    {!('criadorUid' in s) && <span style={{ marginLeft: 6, color: '#f59e0b' }}>· sem criador registrado</span>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => setSalaExpandida(salaExpandida === s.codigo ? null : s.codigo)} style={btnSec}>
+                    {salaExpandida === s.codigo ? '▲ Participantes' : '▼ Participantes'}
+                  </button>
+                  <button onClick={() => handleExcluirSala(s.codigo)} disabled={excluindoCodigo === s.codigo} style={btnDanger}>
+                    {excluindoCodigo === s.codigo ? 'Excluindo...' : '🗑️ Excluir'}
+                  </button>
                 </div>
               </div>
-              <button onClick={() => handleExcluirSala(s.codigo)} disabled={excluindoCodigo === s.codigo} style={btnDanger}>
-                {excluindoCodigo === s.codigo ? 'Excluindo...' : '🗑️ Excluir'}
-              </button>
+              {salaExpandida === s.codigo && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Object.values(s.participantes || {}).length === 0 && <p style={{ fontSize: '0.78rem', color: '#94a3b8', margin: 0 }}>Nenhum participante.</p>}
+                  {Object.values(s.participantes || {}).map(p => (
+                    <div key={p.uid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', padding: '4px 0' }}>
+                      <span>{p.nome} — {p.mercado} <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{formatarDataRelativa(p.entrouEm)}</span></span>
+                      <button onClick={() => handleRemoverParticipante(s.codigo, p)} disabled={removendoUid === p.uid} style={{ ...btnDanger, padding: '4px 8px' }}>
+                        {removendoUid === p.uid ? '...' : '🗑️'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </>

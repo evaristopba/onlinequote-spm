@@ -25,6 +25,13 @@ service cloud.firestore {
       // listas, então ficam automaticamente imutáveis após a criação —
       // é o que fecha o "sequestro de sala" (trocar criadorUid pra depois
       // poder excluir) e a falsificação de participante/mercado.
+      // Um admin (ver coleção `admins` no fim deste arquivo) pode
+      // reescrever o documento inteiro — é a única forma seguraде
+      // remover uma entrada fantasma de participante (sessão duplicada
+      // de outro navegador/dispositivo): o Firestore não tem como saber
+      // que duas entradas com nome+mercado iguais são "a mesma pessoa",
+      // então um participante comum nunca pode apagar a entrada alheia,
+      // só o admin.
       allow update: if request.auth != null && (
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantes'])
@@ -37,6 +44,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['produtos'])
           && request.resource.data.produtos is list
         )
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
 
       // Quem criou a sala pode excluí-la. Salas antigas (criadas antes do
@@ -74,7 +82,9 @@ service cloud.firestore {
 
         // Só o dono daquele mercado pode apagar o próprio preço, ou quem
         // pode excluir a sala inteira (criador, ou qualquer participante
-        // se for uma sala antiga sem criadorUid — usado pela limpeza em massa).
+        // se for uma sala antiga sem criadorUid — usado pela limpeza em
+        // massa), ou um admin (idem — precisa poder limpar a subcoleção
+        // inteira antes de apagar a sala).
         allow delete: if request.auth != null
           && (
             (
@@ -83,6 +93,7 @@ service cloud.firestore {
               : request.auth.uid in get(/databases/$(database)/documents/salas/$(salaId)).data.participantes
             )
             || get(/databases/$(database)/documents/salas/$(salaId)).data.participantes[request.auth.uid].mercado == resource.data.mercado
+            || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
           );
       }
     }

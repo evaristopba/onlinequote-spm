@@ -162,6 +162,10 @@ Onde encontrar:
 
 > Esse link não tem senha — quem tiver o link consegue lançar preço "como" aquela pessoa. Pra esse app (compartilhado entre gente de confiança, sem dado sensível em jogo) é um risco aceitável, mas vale não forwardar o link de terceiros sem necessidade.
 
+**Limitações conhecidas, por design:**
+- O link restaura a coluna de **preço/mercado**, mas **não** o botão "Encerrar sala" pra quem criou a sala — status de criador fica preso ao navegador/sessão original de propósito (senão, qualquer um que soubesse o nome público do criador poderia forjar um link e sequestrar a sala). Se o criador perder o acesso original, a exclusão dessa sala vira tarefa do admin (`/admin`).
+- Reabrir o mesmo link em navegadores/aparelhos diferentes gera uma sessão anônima nova a cada vez, então a lista de participantes pode acumular entradas repetidas com nome+mercado iguais (cada sessão perdida deixa uma "sombra" pra trás). A lista já mescla isso visualmente (mostra só a mais recente + contador de sessões antigas), mas apagar as entradas de verdade do banco só o admin consegue fazer (`/admin` → Todas as salas → ▼ Participantes → 🗑️).
+
 ---
 
 ## 🎮 Como usar

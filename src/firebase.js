@@ -104,6 +104,24 @@ export const apagarProdutoDeVez = async (id) => {
   await deleteDoc(doc(db, 'produtos', id))
 }
 
+// Remove UMA entrada específica de participante de uma sala (por uid) —
+// usado pra limpar sessões fantasma (mesma pessoa reabrindo o link
+// pessoal em navegadores/aparelhos diferentes, cada um vira um uid novo
+// e uma entrada nova). Só admin consegue: a regra de update de `salas`
+// só deixa cada participante mexer na PRÓPRIA entrada, então remover a
+// entrada de outra pessoa exige o bypass de admin.
+export const removerParticipanteAdmin = async (codigo, uidParticipante) => {
+  if (!db) throw new Error('Firebase nao inicializado')
+  const salaRef = doc(db, 'salas', codigo)
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(salaRef)
+    if (!snap.exists()) throw new Error('Sala nao encontrada')
+    const participantes = { ...(snap.data().participantes || {}) }
+    delete participantes[uidParticipante]
+    tx.update(salaRef, { participantes })
+  })
+}
+
 export const gerarCodigo = () => {
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let r = ''
