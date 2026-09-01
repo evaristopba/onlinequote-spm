@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, auth, buscarProdutoBasePropria, listarBasePropria } from '../firebase.js'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, entrarSala, auth, buscarProdutoBasePropria, listarBasePropria } from '../firebase.js'
 import { parsePreco, formatarDataRelativa } from '../utils/ptBR.js'
 import { buscarProdutoPorCodigo } from '../utils/barcode.js'
 import { infoPreco } from '../utils/precos.js'
@@ -12,10 +12,13 @@ import Participantes from './Participantes.jsx'
 import BarcodeScanner from './BarcodeScanner.jsx'
 import CadastrarProduto from './CadastrarProduto.jsx'
 import ProdutoModal from './ProdutoModal.jsx'
+import { confirmar, avisar } from '../utils/dialog.js'
+import { linkParticipante, copiarTexto } from '../utils/linkParticipante.js'
 
 export default function Sala() {
   const { codigo } = useParams()
   const nav = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const online = useOnline()
   const [sala, setSala] = useState(null)
   const [precos, setPrecos] = useState({})
@@ -29,6 +32,30 @@ export default function Sala() {
   const [excluindo, setExcluindo] = useState(false)
   const [aba, setAba] = useState('todos')
   const [baseProdutos, setBaseProdutos] = useState([])
+  const [entrandoViaLink, setEntrandoViaLink] = useState(false)
+  const [copiadoMeuLink, setCopiadoMeuLink] = useState(false)
+
+  // Link pessoal (?nome=...&mercado=...): reentra de verdade na sala
+  // (mesma função usada pela tela "Entrar com código"), o que grava a
+  // sessão atual como participante daquele mercado — é isso que
+  // realmente libera a coluna, não só a aparência da tela. Funciona
+  // mesmo numa sessão anônima nova (outro aparelho, cache limpo etc.),
+  // que era o cenário de perder o acesso no meio da cotação.
+  useEffect(() => {
+    const nomeUrl = searchParams.get('nome')
+    const mercadoUrl = searchParams.get('mercado')
+    if (!nomeUrl || !mercadoUrl) return
+    setEntrandoViaLink(true)
+    entrarSala(codigo, nomeUrl, mercadoUrl)
+      .catch(e => avisar('Não foi possível entrar automaticamente pelo link: ' + e.message))
+      .finally(() => {
+        setEntrandoViaLink(false)
+        // Tira nome/mercado da URL depois de usados — evita reenviar a
+        // cada refresh e some do histórico do navegador.
+        setSearchParams({}, { replace: true })
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigo])
 
   useEffect(() => {
     listarBasePropria().then(setBaseProdutos).catch((e) => {
@@ -83,9 +110,20 @@ export default function Sala() {
   )
 
   const handleExcluir = async () => {
-    if (!confirm('Excluir essa sala e todos os preços lançados? Essa ação não pode ser desfeita.')) return
+    const ok = await confirmar('Excluir essa sala e todos os preços lançados? Essa ação não pode ser desfeita.', { titulo: 'Encerrar sala', textoConfirmar: 'Excluir', perigo: true })
+    if (!ok) return
     setExcluindo(true)
-    try { await excluirSala(codigo); limparUltimaSala(); nav('/') } catch (e) { alert('Erro ao excluir: ' + e.message); setExcluindo(false) }
+    try { await excluirSala(codigo); limparUltimaSala(); nav('/') } catch (e) { avisar('Erro ao excluir: ' + e.message); setExcluindo(false) }
+  }
+
+  const handleCopiarMeuLink = async () => {
+    const ok = await copiarTexto(linkParticipante(codigo, meuNome, meuMercado))
+    if (ok) {
+      setCopiadoMeuLink(true)
+      setTimeout(() => setCopiadoMeuLink(false), 1800)
+    } else {
+      avisar('Não foi possível copiar automaticamente. Copie a URL da barra de endereço mesmo.')
+    }
   }
 
   const handlePreco = async (pid, m, v) => {
@@ -234,8 +272,9 @@ export default function Sala() {
   }
 
   const handleRemoverProduto = async (p) => {
-    if (!confirm(`Remover "${p.nome}" da cotação? Os preços já lançados desse produto também somem.`)) return
-    try { await removerProduto(codigo, p.id) } catch (e) { alert('Erro ao remover: ' + e.message) }
+    const ok = await confirmar(`Remover "${p.nome}" da cotação? Os preços já lançados desse produto também somem.`, { titulo: 'Remover produto', textoConfirmar: 'Remover', perigo: true })
+    if (!ok) return
+    try { await removerProduto(codigo, p.id) } catch (e) { avisar('Erro ao remover: ' + e.message) }
   }
 
   if (naoEncontrada && !online) return <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}><p>📴 Sem conexão e sem dados dessa sala no cache.</p><button onClick={() => window.location.reload()} style={{ marginTop: 12, padding: '10px 20px', borderRadius: 8, border: 'none', background: '#3b82f6', color: 'white', fontWeight: 700 }}>Tentar novamente</button></div>
@@ -250,10 +289,18 @@ export default function Sala() {
         <div style={{ textAlign: 'right' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: online ? '#10b981' : '#f59e0b', fontWeight: 600, justifyContent: 'flex-end' }}><span style={{ width: 8, height: 8, background: online ? '#10b981' : '#f59e0b', borderRadius: '50%', display: 'inline-block', animation: 'pulse 1.5s infinite' }}></span>{online ? 'AO VIVO' : 'OFFLINE'}</div>
           <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>Você: <strong>{meuNome}</strong> · Mercado: <strong>{meuMercado}</strong></div>
-          {souCriador && <button onClick={handleExcluir} disabled={excluindo} style={{ marginTop: 6, padding: '5px 10px', borderRadius: 6, border: '1px solid #fca5a5', background: 'white', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>{excluindo ? 'Excluindo...' : '🗑️ Encerrar sala'}</button>}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
+            {meuMercado && (
+              <button onClick={handleCopiarMeuLink} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #93c5fd', background: 'white', color: copiadoMeuLink ? '#10b981' : '#3b82f6', fontSize: '0.75rem', fontWeight: 600 }}>
+                {copiadoMeuLink ? '✅ Copiado!' : '🔗 Meu link'}
+              </button>
+            )}
+            {souCriador && <button onClick={handleExcluir} disabled={excluindo} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #fca5a5', background: 'white', color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>{excluindo ? 'Excluindo...' : '🗑️ Encerrar sala'}</button>}
+          </div>
         </div>
       </div>
-      <Participantes participantes={sala.participantes} />
+      {entrandoViaLink && <div style={{ background: '#eff6ff', border: '1px solid #93c5fd', color: '#1e40af', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: '0.85rem', fontWeight: 600 }}>🔗 Entrando pelo seu link...</div>}
+      <Participantes participantes={sala.participantes} codigo={codigo} />
       <div style={{ background: 'white', borderRadius: 12, padding: 18, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: '1.05rem' }}>📊 Cotação em Tempo Real</h3>

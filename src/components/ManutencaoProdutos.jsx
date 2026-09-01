@@ -3,6 +3,7 @@ import{useNavigate}from'react-router-dom'
 import{listarBasePropria,definirAtivoBasePropria,desvincularVariante}from'../firebase.js'
 import EditarProdutoBase from'./EditarProdutoBase.jsx'
 import VincularVariante from'./VincularVariante.jsx'
+import{confirmar,avisar}from'../utils/dialog.js'
 export default function ManutencaoProdutos(){
   const nav=useNavigate()
   const[produtos,setProdutos]=useState(null)
@@ -47,7 +48,7 @@ export default function ManutencaoProdutos(){
     try{
       await definirAtivoBasePropria(p.id,!p.ativo)
       setProdutos(ps=>ps.map(x=>x.id===p.id?{...x,ativo:!p.ativo}:x))
-    }catch(e){alert('Erro: '+e.message)}
+    }catch(e){avisar('Erro: '+e.message)}
     setAlternando(null)
   }
   const handleVinculado=()=>{
@@ -55,12 +56,13 @@ export default function ManutencaoProdutos(){
     carregar()
   }
   const handleDesvincular=async(p)=>{
-    if(!confirm(`Desvincular "${p.nome}" das variantes ligadas a ele?`))return
+    const ok=await confirmar(`Desvincular "${p.nome}" das variantes ligadas a ele?`,{titulo:'Desvincular variante'})
+    if(!ok)return
     setDesvinculando(p.id)
     try{
       await desvincularVariante(p.id)
       carregar()
-    }catch(e){alert('Erro ao desvincular: '+e.message)}
+    }catch(e){avisar('Erro ao desvincular: '+e.message)}
     setDesvinculando(null)
   }
 

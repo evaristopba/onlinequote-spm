@@ -6,6 +6,7 @@ import BarcodeScanner from './BarcodeScanner.jsx'
 import CadastrarProduto from './CadastrarProduto.jsx'
 import ProdutoModal from './ProdutoModal.jsx'
 import { formatarQuantidade, parseQuantidadeExistente } from '../utils/ptBR.js'
+import { avisar } from '../utils/dialog.js'
 
 export default function CriarSala() {
   const nav = useNavigate()
@@ -181,14 +182,14 @@ export default function CriarSala() {
   const remover = (idx) => setProdutos(p => p.filter((_, i) => i !== idx))
 
   const handleCriar = async () => {
-    if (!nome.trim() || !mercado.trim()) return alert('Preencha nome e mercado')
-    if (produtos.length === 0) return alert('Adicione pelo menos um produto')
+    if (!nome.trim() || !mercado.trim()) { avisar('Preencha nome e mercado'); return }
+    if (produtos.length === 0) { avisar('Adicione pelo menos um produto'); return }
     setCarregando(true)
     try {
       const c = await criarSala(nomeSala || 'Cotação', produtos, nome, mercado)
       await Promise.all(produtos.map((p, i) => p.preco != null ? lancarPreco(c, `p${i}`, mercado, p.preco) : null))
       nav(`/sala/${c}`)
-    } catch (e) { alert('Erro: ' + e.message); setCarregando(false) }
+    } catch (e) { avisar('Erro: ' + e.message); setCarregando(false) }
   }
 
   return (

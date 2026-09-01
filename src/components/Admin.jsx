@@ -6,6 +6,7 @@ import {
   listarBasePropria, apagarProdutoDeVez, definirAtivoBasePropria,
 } from '../firebase.js'
 import { formatarDataRelativa } from '../utils/ptBR.js'
+import { confirmar, avisar } from '../utils/dialog.js'
 
 // Painel restrito — não tem link visível em nenhuma tela normal do app,
 // só é acessível digitando /admin na URL. A segurança de verdade está
@@ -37,13 +38,13 @@ export default function Admin() {
     setSalas(null)
     listarTodasSalas()
       .then(l => setSalas(l.sort((a, b) => new Date(b.criadoEm) - new Date(a.criadoEm))))
-      .catch(e => alert('Erro ao carregar salas: ' + e.message))
+      .catch(e => avisar('Erro ao carregar salas: ' + e.message))
   }
   const carregarProdutos = () => {
     setProdutos(null)
     listarBasePropria()
       .then(l => setProdutos(l.sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'))))
-      .catch(e => alert('Erro ao carregar produtos: ' + e.message))
+      .catch(e => avisar('Erro ao carregar produtos: ' + e.message))
   }
 
   useEffect(() => {
@@ -71,25 +72,27 @@ export default function Admin() {
   }
 
   const handleExcluirSala = async (codigo) => {
-    if (!confirm(`Excluir DEFINITIVAMENTE a sala #${codigo} e todos os preços lançados nela? Essa ação não pode ser desfeita.`)) return
+    const ok = await confirmar(`Excluir DEFINITIVAMENTE a sala #${codigo} e todos os preços lançados nela? Essa ação não pode ser desfeita.`, { titulo: 'Excluir sala', textoConfirmar: 'Excluir', perigo: true })
+    if (!ok) return
     setExcluindoCodigo(codigo)
     try {
       await excluirSala(codigo)
       setSalas(s => s.filter(x => x.codigo !== codigo))
     } catch (e) {
-      alert('Erro ao excluir: ' + e.message)
+      avisar('Erro ao excluir: ' + e.message)
     }
     setExcluindoCodigo(null)
   }
 
   const handleApagarProduto = async (p) => {
-    if (!confirm(`Apagar DEFINITIVAMENTE "${p.nome}" da base de produtos?\n\nIsso não pode ser desfeito. Se esse produto ainda estiver em alguma cotação ativa, ele vai parar de existir na base própria (mas continua aparecendo na cotação como um item avulso, sem cadastro vinculado).`)) return
+    const ok = await confirmar(`Apagar DEFINITIVAMENTE "${p.nome}" da base de produtos?\n\nIsso não pode ser desfeito. Se esse produto ainda estiver em alguma cotação ativa, ele vai parar de existir na base própria (mas continua aparecendo na cotação como um item avulso, sem cadastro vinculado).`, { titulo: 'Apagar produto', textoConfirmar: 'Apagar de vez', perigo: true })
+    if (!ok) return
     setApagandoId(p.id)
     try {
       await apagarProdutoDeVez(p.id)
       setProdutos(ps => ps.filter(x => x.id !== p.id))
     } catch (e) {
-      alert('Erro ao apagar: ' + e.message)
+      avisar('Erro ao apagar: ' + e.message)
     }
     setApagandoId(null)
   }
@@ -99,7 +102,7 @@ export default function Admin() {
       await definirAtivoBasePropria(p.id, !p.ativo)
       setProdutos(ps => ps.map(x => x.id === p.id ? { ...x, ativo: !p.ativo } : x))
     } catch (e) {
-      alert('Erro: ' + e.message)
+      avisar('Erro: ' + e.message)
     }
   }
 

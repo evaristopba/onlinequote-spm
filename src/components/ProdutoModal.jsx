@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { formatarQuantidade, parseQuantidadeExistente, formatarInputPreco, parsePreco } from '../utils/ptBR.js'
 import { TIPOS_OFERTA } from '../utils/precos.js'
 import { buscarProdutosPorNome, buscarProdutoBasePropria, salvarProdutoBasePropria, editarProdutoBasePropria } from '../firebase.js'
+import { avisar } from '../utils/dialog.js'
 
 const CATEGORIAS = ['Alimentos', 'Bebidas', 'Limpeza', 'Higiene', 'Frios e Laticínios', 'Padaria', 'Açougue', 'Outros']
 const UNIDADES = ['g', 'kg', 'ml', 'L', 'un', 'pct', 'cx', 'caixa', 'pacote']
@@ -177,10 +178,10 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, edita
   const handleConfirmar = async () => {
     if (!somentePreco && !nome.trim()) return
     const v = parseFloat(String(valorQtd).replace(',', '.'))
-    if (!somentePreco && (isNaN(v) || v <= 0)) return alert('Quantidade precisa ser um número maior que zero')
+    if (!somentePreco && (isNaN(v) || v <= 0)) { avisar('Quantidade precisa ser um número maior que zero'); return }
     const precoNum = preco.trim() ? parsePreco(preco) : null
-    if (preco.trim() && precoNum === null) return alert('Preço inválido')
-    if (somentePreco && precoNum === null) return alert('Informe o preço')
+    if (preco.trim() && precoNum === null) { avisar('Preço inválido'); return }
+    if (somentePreco && precoNum === null) { avisar('Informe o preço'); return }
 
     // 🔥 Só valida se o usuário ALTEROU o código (digitou algo diferente do original)
     const codigoParaValidar = codigoBarras?.trim() || ''
@@ -232,7 +233,7 @@ export default function ProdutoModal({ titulo, aviso, inicial, meuMercado, edita
 
       await onConfirmar(dadosProduto)
     } catch (e) {
-      alert('Erro ao salvar produto: ' + e.message)
+      avisar('Erro ao salvar produto: ' + e.message)
       setSalvando(false)
     }
   }

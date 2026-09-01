@@ -152,6 +152,18 @@ Pra desvincular, use **✂️ Desvincular** na Manutenção. Vincular um produto
 
 ---
 
+## 🔗 Link pessoal de participante (novo)
+
+Cada participante tem um link próprio (`.../sala/CODIGO?nome=...&mercado=...`) que reabre a sala **já reconectado como aquela pessoa**, em qualquer aparelho — mesmo sem sessão anterior naquele navegador. Resolve o cenário de perder o acesso no meio de uma cotação (trocar de celular, limpar dados do navegador, etc.): reabrindo o link, a pessoa recupera a própria coluna sem digitar nada de novo e sem perder nenhum preço já lançado (os preços ficam gravados por nome de mercado, não pela sessão de quem lançou).
+
+Onde encontrar:
+- Botão **🔗 Meu link** no topo da sala (visível pra qualquer participante já registrado)
+- Ícone **🔗** ao lado de cada nome na lista de participantes — assim qualquer pessoa da sala pode reenviar o link de alguém que perdeu o próprio, sem depender de quem criou a sala
+
+> Esse link não tem senha — quem tiver o link consegue lançar preço "como" aquela pessoa. Pra esse app (compartilhado entre gente de confiança, sem dado sensível em jogo) é um risco aceitável, mas vale não forwardar o link de terceiros sem necessidade.
+
+---
+
 ## 🎮 Como usar
 
 1. **Criar:** escaneia/adiciona produtos → código `#X7K9P2`
@@ -175,7 +187,9 @@ src/
 │   ├── ptBR.js
 │   ├── barcode.js
 │   ├── precos.js            # leitura de preço/oferta + tipos de oferta
-│   └── conexao.js           # status online/offline + última sala
+│   ├── conexao.js           # status online/offline + última sala
+│   ├── linkParticipante.js  # link pessoal de participante (nome+mercado na URL)
+│   └── dialog.js            # substitui alert()/confirm() nativos
 └── components/
     ├── CriarSala.jsx        # Busca híbrida
     ├── EntrarSala.jsx
@@ -193,6 +207,7 @@ src/
     ├── MinhasSalas.jsx
     ├── MigracaoProdutos.jsx
     ├── Admin.jsx             # painel restrito (excluir qualquer sala, apagar produto de vez)
+    ├── DialogHost.jsx        # modal de confirmação/aviso com a cara do app
     └── ErrorBoundary.jsx
 ```
 

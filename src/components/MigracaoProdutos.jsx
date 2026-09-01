@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { previewMigracao, migrarProdutos } from '../migrarProdutos.js'
+import { confirmar, avisar } from './../utils/dialog.js'
 
 export default function MigracaoProdutos({ onClose }) {
   const [carregando, setCarregando] = useState(false)
@@ -12,20 +13,21 @@ export default function MigracaoProdutos({ onClose }) {
       const dados = await previewMigracao()
       setPreview(dados)
     } catch (e) {
-      alert('Erro no preview: ' + e.message)
+      avisar('Erro no preview: ' + e.message)
     }
     setCarregando(false)
   }
 
   const handleMigrar = async () => {
-    if (!confirm('Tem certeza que quer migrar todos os produtos pendentes?')) return
+    const ok = await confirmar('Tem certeza que quer migrar todos os produtos pendentes?', { titulo: 'Migrar produtos' })
+    if (!ok) return
     setCarregando(true)
     try {
       const dados = await migrarProdutos()
       setResultado(dados)
       setPreview(null)
     } catch (e) {
-      alert('Erro na migração: ' + e.message)
+      avisar('Erro na migração: ' + e.message)
     }
     setCarregando(false)
   }

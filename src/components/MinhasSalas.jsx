@@ -2,6 +2,7 @@ import{useEffect,useState}from'react'
 import{useNavigate}from'react-router-dom'
 import{listarMinhasSalas,excluirSala,auth}from'../firebase.js'
 import{formatarDataRelativa}from'../utils/ptBR.js'
+import{confirmar,avisar}from'../utils/dialog.js'
 export default function MinhasSalas(){
   const nav=useNavigate()
   const[salas,setSalas]=useState(null)
@@ -16,12 +17,13 @@ export default function MinhasSalas(){
   useEffect(()=>{carregar()},[])
 
   const handleExcluir=async(codigo)=>{
-    if(!confirm(`Excluir a sala #${codigo}? Essa ação não pode ser desfeita.`))return
+    const ok=await confirmar(`Excluir a sala #${codigo}? Essa ação não pode ser desfeita.`,{titulo:'Excluir sala',textoConfirmar:'Excluir',perigo:true})
+    if(!ok)return
     setExcluindo(codigo)
     try{
       await excluirSala(codigo)
       setSalas(s=>s.filter(x=>x.codigo!==codigo))
-    }catch(e){alert('Erro ao excluir: '+e.message)}
+    }catch(e){avisar('Erro ao excluir: '+e.message)}
     setExcluindo(null)
   }
 

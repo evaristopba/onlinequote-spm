@@ -1,6 +1,7 @@
 import{useState}from'react'
 import{salvarProdutoBasePropria}from'../firebase.js'
 import{formatarQuantidade,parseQuantidadeExistente}from'../utils/ptBR.js'
+import{avisar}from'../utils/dialog.js'
 const CATEGORIAS=['Alimentos','Bebidas','Limpeza','Higiene','Frios e Laticínios','Padaria','Açougue','Outros']
 export default function CadastrarProduto({dadosIniciais,onSalvo,onCancelar}){
   const qtdInicial=parseQuantidadeExistente(dadosIniciais?.quantidade)
@@ -11,9 +12,9 @@ export default function CadastrarProduto({dadosIniciais,onSalvo,onCancelar}){
   const[unidade,setUnidade]=useState(qtdInicial.unidade)
   const[carregando,setCarregando]=useState(false)
   const handleSalvar=async()=>{
-    if(!nome.trim())return alert('Nome é obrigatório')
+    if(!nome.trim()){avisar('Nome é obrigatório');return}
     const v=parseFloat(String(valorQtd).replace(',','.'))
-    if(isNaN(v)||v<=0)return alert('Quantidade precisa ser um número maior que zero')
+    if(isNaN(v)||v<=0){avisar('Quantidade precisa ser um número maior que zero');return}
     const quantidadeFormatada=formatarQuantidade(v,unidade.trim()||'un')
     setCarregando(true)
     try{
@@ -27,7 +28,7 @@ export default function CadastrarProduto({dadosIniciais,onSalvo,onCancelar}){
         imagem:dadosIniciais?.imagem||null,
       })
       onSalvo({nome:nome.trim(),marca:marca.trim(),categoria,quantidade:quantidadeFormatada,unidade:unidade.trim(),codigo:dadosIniciais?.codigoBarras||null})
-    }catch(e){alert('Erro ao salvar: '+e.message);setCarregando(false)}
+    }catch(e){avisar('Erro ao salvar: '+e.message);setCarregando(false)}
   }
   return<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
     <div style={{width:'100%',maxWidth:420,background:'white',borderRadius:16,padding:24,boxShadow:'0 20px 40px rgba(0,0,0,0.2)'}}>

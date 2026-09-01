@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { buscarProdutosPorNome, vincularVariante } from '../firebase.js'
+import { avisar } from '../utils/dialog.js'
 
 export default function VincularVariante({ produto, onVinculado, onCancelar }) {
   const [termo, setTermo] = useState('')
@@ -29,7 +30,7 @@ export default function VincularVariante({ produto, onVinculado, onCancelar }) {
       await vincularVariante(produto.id, outro.id)
       onVinculado()
     } catch (e) {
-      alert('Erro ao vincular: ' + e.message)
+      avisar('Erro ao vincular: ' + e.message)
       setSalvando(false)
     }
   }

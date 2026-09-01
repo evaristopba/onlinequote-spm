@@ -1,6 +1,7 @@
 import{useState}from'react'
 import{useNavigate}from'react-router-dom'
 import{entrarSala}from'../firebase.js'
+import{avisar}from'../utils/dialog.js'
 export default function EntrarSala(){
   const nav=useNavigate()
   const[codigo,setCodigo]=useState('')
@@ -8,10 +9,10 @@ export default function EntrarSala(){
   const[mercado,setMercado]=useState('')
   const[carregando,setCarregando]=useState(false)
   const handleEntrar=async()=>{
-    if(!codigo.trim()||!nome.trim()||!mercado.trim())return alert('Preencha todos os campos')
+    if(!codigo.trim()||!nome.trim()||!mercado.trim()){avisar('Preencha todos os campos');return}
     setCarregando(true)
     try{await entrarSala(codigo.toUpperCase(),nome,mercado);nav(`/sala/${codigo.toUpperCase()}`)}
-    catch(e){alert(e.message);setCarregando(false)}
+    catch(e){avisar(e.message);setCarregando(false)}
   }
   return<div style={{maxWidth:420,margin:'0 auto',padding:'40px 16px'}}>
     <h2 style={{marginBottom:20}}>🔐 Entrar na Cotação</h2>

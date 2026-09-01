@@ -1,6 +1,7 @@
 import{useState}from'react'
 import{editarProdutoBasePropria}from'../firebase.js'
 import{formatarQuantidade,parseQuantidadeExistente}from'../utils/ptBR.js'
+import{avisar}from'../utils/dialog.js'
 const CATEGORIAS=['Alimentos','Bebidas','Limpeza','Higiene','Frios e Laticínios','Padaria','Açougue','Outros']
 export default function EditarProdutoBase({produto,onSalvo,onCancelar}){
   const qtdInicial=parseQuantidadeExistente(produto.quantidade)
@@ -12,15 +13,15 @@ export default function EditarProdutoBase({produto,onSalvo,onCancelar}){
   const[salvando,setSalvando]=useState(false)
 
   const handleSalvar=async()=>{
-    if(!nome.trim())return alert('Nome é obrigatório')
+    if(!nome.trim()){avisar('Nome é obrigatório');return}
     const v=parseFloat(String(valorQtd).replace(',','.'))
-    if(isNaN(v)||v<=0)return alert('Quantidade precisa ser um número maior que zero')
+    if(isNaN(v)||v<=0){avisar('Quantidade precisa ser um número maior que zero');return}
     setSalvando(true)
     try{
       const dados={nome:nome.trim(),marca:marca.trim(),categoria,quantidade:formatarQuantidade(v,unidade.trim()||'un'),unidade:unidade.trim()}
       await editarProdutoBasePropria(produto.id,dados)
       onSalvo({...produto,...dados})
-    }catch(e){alert('Erro ao salvar: '+e.message);setSalvando(false)}
+    }catch(e){avisar('Erro ao salvar: '+e.message);setSalvando(false)}
   }
 
   return<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
