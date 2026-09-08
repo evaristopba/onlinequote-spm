@@ -1,11 +1,12 @@
 import{formatarMoeda}from'../utils/ptBR.js'
 import{infoPreco}from'../utils/precos.js'
+import{chaveMercado,listarMercadosUnicos}from'../utils/mercados.js'
 export default function ListaOtimizada({produtos,precos,participantes}){
-  const mercados=[...new Set(Object.values(participantes).map(p=>p.mercado))].sort((a,b)=>a.localeCompare(b,'pt-BR'))
+  const mercados=listarMercadosUnicos(participantes).sort((a,b)=>a.localeCompare(b,'pt-BR'))
   const grupos={};let totalOpt=0,totalMax=0,mercadosUsados=new Set();const categorias={}
   produtos.forEach(p=>{
     let menor=Infinity,mercMenor=null,maior=0,ofertaMenor=null
-    mercados.forEach(m=>{const i=infoPreco(precos[p.id]?.[m]);const v=i?.preco;if(v){if(v<menor){menor=v;mercMenor=m;ofertaMenor=i.oferta?i:null}if(v>maior)maior=v}})
+    mercados.forEach(m=>{const i=infoPreco(precos[p.id]?.[chaveMercado(m)]);const v=i?.preco;if(v){if(v<menor){menor=v;mercMenor=m;ofertaMenor=i.oferta?i:null}if(v>maior)maior=v}})
     if(mercMenor){
       if(!grupos[mercMenor])grupos[mercMenor]=[]
       grupos[mercMenor].push({nome:p.nome,qtd:p.quantidade,preco:menor,categoria:p.categoria||'Outros',oferta:ofertaMenor})

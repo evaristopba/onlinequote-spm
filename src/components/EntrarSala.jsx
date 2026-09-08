@@ -11,7 +11,7 @@ export default function EntrarSala(){
   const handleEntrar=async()=>{
     if(!codigo.trim()||!nome.trim()||!mercado.trim()){avisar('Preencha todos os campos');return}
     setCarregando(true)
-    try{await entrarSala(codigo.toUpperCase(),nome,mercado);nav(`/sala/${codigo.toUpperCase()}`)}
+    try{await entrarSala(codigo.toUpperCase(),nome.trim(),mercado.trim());nav(`/sala/${codigo.toUpperCase()}`)}
     catch(e){avisar(e.message);setCarregando(false)}
   }
   return<div style={{maxWidth:420,margin:'0 auto',padding:'40px 16px'}}>

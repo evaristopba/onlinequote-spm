@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { escutarSala, escutarPrecos, lancarPreco, adicionarProduto, editarProduto, removerProduto, excluirSala, entrarSala, auth, buscarProdutoBasePropria, listarBasePropria } from '../firebase.js'
 import { parsePreco, formatarDataRelativa } from '../utils/ptBR.js'
@@ -9,11 +9,14 @@ import TabelaCotacao from './TabelaCotacao.jsx'
 import ListaOtimizada from './ListaOtimizada.jsx'
 import VariantesComparacao from './VariantesComparacao.jsx'
 import Participantes from './Participantes.jsx'
-import BarcodeScanner from './BarcodeScanner.jsx'
+// html5-qrcode é pesada e só serve pra quem realmente escaneia — lazy
+// evita jogar isso no bundle inicial de todo mundo.
+const BarcodeScanner = lazy(() => import('./BarcodeScanner.jsx'))
 import CadastrarProduto from './CadastrarProduto.jsx'
 import ProdutoModal from './ProdutoModal.jsx'
 import { confirmar, avisar } from '../utils/dialog.js'
 import { linkParticipante, copiarTexto } from '../utils/linkParticipante.js'
+import { chaveMercado, listarMercadosUnicos } from '../utils/mercados.js'
 
 export default function Sala() {
   const { codigo } = useParams()
@@ -34,6 +37,9 @@ export default function Sala() {
   const [baseProdutos, setBaseProdutos] = useState([])
   const [entrandoViaLink, setEntrandoViaLink] = useState(false)
   const [copiadoMeuLink, setCopiadoMeuLink] = useState(false)
+  const [pendenteSala, setPendenteSala] = useState(false)
+  const [pendentePrecos, setPendentePrecos] = useState(false)
+  const sincronizando = pendenteSala || pendentePrecos
 
   // Link pessoal (?nome=...&mercado=...): reentra de verdade na sala
   // (mesma função usada pela tela "Entrar com código"), o que grava a
@@ -46,7 +52,7 @@ export default function Sala() {
     const mercadoUrl = searchParams.get('mercado')
     if (!nomeUrl || !mercadoUrl) return
     setEntrandoViaLink(true)
-    entrarSala(codigo, nomeUrl, mercadoUrl)
+    entrarSala(codigo, nomeUrl.trim(), mercadoUrl.trim())
       .catch(e => avisar('Não foi possível entrar automaticamente pelo link: ' + e.message))
       .finally(() => {
         setEntrandoViaLink(false)
@@ -65,10 +71,11 @@ export default function Sala() {
   }, [])
 
   useEffect(() => {
-    const unsub = escutarSala(codigo, (d) => {
+    const unsub = escutarSala(codigo, (d, meta) => {
       if (!d) { setNaoEncontrada(true); setSala(null); return }
       setNaoEncontrada(false)
       setSala(d)
+      setPendenteSala(!!meta?.hasPendingWrites)
       const u = auth.currentUser?.uid
       if (u && d.participantes[u]) {
         setMeuMercado(d.participantes[u].mercado)
@@ -79,7 +86,10 @@ export default function Sala() {
   }, [codigo])
 
   useEffect(() => {
-    const unsub = escutarPrecos(codigo, setPrecos)
+    const unsub = escutarPrecos(codigo, (p, meta) => {
+      setPrecos(p)
+      setPendentePrecos(!!meta?.hasPendingWrites)
+    })
     return () => unsub()
   }, [codigo])
 
@@ -87,7 +97,7 @@ export default function Sala() {
     if (sala) salvarUltimaSala(codigo, sala.nome)
   }, [codigo, sala?.nome])
 
-  const mercados = useMemo(() => sala ? [...new Set(Object.values(sala.participantes || {}).map(p => p.mercado))] : [], [sala])
+  const mercados = useMemo(() => sala ? listarMercadosUnicos(sala.participantes) : [], [sala])
   const grupoPorCodigo = useMemo(() => {
     const mapa = {}
     baseProdutos.forEach((b) => {
@@ -99,7 +109,7 @@ export default function Sala() {
   const completos = useMemo(() => {
     if (mercados.length === 0) return []
     return produtos.filter(p => mercados.every(m => {
-      const i = infoPreco(precos[p.id]?.[m])
+      const i = infoPreco(precos[p.id]?.[chaveMercado(m)])
       return i && i.preco > 0
     }))
   }, [produtos, precos, mercados])
@@ -129,7 +139,7 @@ export default function Sala() {
   const handlePreco = async (pid, m, v) => {
     const n = parsePreco(v)
     if (n === null) return
-    const atual = infoPreco(precos[pid]?.[m])
+    const atual = infoPreco(precos[pid]?.[chaveMercado(m)])
     await lancarPreco(codigo, pid, m, n, atual?.oferta ? { tipo: atual.tipoOferta, obs: atual.obsOferta } : null)
   }
 
@@ -141,7 +151,7 @@ export default function Sala() {
   }
 
   const abrirLancamentoPreco = (p, aviso) => {
-    const atual = infoPreco(precos[p.id]?.[meuMercado])
+    const atual = infoPreco(precos[p.id]?.[chaveMercado(meuMercado)])
     setMostrarProdutoModal({
       titulo: '💲 Lançar/atualizar preço',
       aviso,
@@ -263,9 +273,9 @@ export default function Sala() {
         unidade: p.unidade || 'un',
         categoria: p.categoria || 'Outros',
         codigo: p.codigo || null,
-        preco: infoPreco(precos[p.id]?.[meuMercado])?.preco || null,
-        tipoOferta: infoPreco(precos[p.id]?.[meuMercado])?.tipoOferta || '',
-        obsOferta: infoPreco(precos[p.id]?.[meuMercado])?.obsOferta || '',
+        preco: infoPreco(precos[p.id]?.[chaveMercado(meuMercado)])?.preco || null,
+        tipoOferta: infoPreco(precos[p.id]?.[chaveMercado(meuMercado)])?.tipoOferta || '',
+        obsOferta: infoPreco(precos[p.id]?.[chaveMercado(meuMercado)])?.obsOferta || '',
       },
       editandoProdutoId: p.id,
     })
@@ -288,6 +298,7 @@ export default function Sala() {
         <div><div style={{ fontSize: '0.8rem', color: '#64748b' }}>Sala · Criada {formatarDataRelativa(sala.criadoEm)}</div><div style={{ fontFamily: 'monospace', fontSize: '1.5rem', fontWeight: 700, color: '#f59e0b', letterSpacing: 3 }}>#{codigo}</div></div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: online ? '#10b981' : '#f59e0b', fontWeight: 600, justifyContent: 'flex-end' }}><span style={{ width: 8, height: 8, background: online ? '#10b981' : '#f59e0b', borderRadius: '50%', display: 'inline-block', animation: 'pulse 1.5s infinite' }}></span>{online ? 'AO VIVO' : 'OFFLINE'}</div>
+          {sincronizando && <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>🔄 Sincronizando...</div>}
           <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>Você: <strong>{meuNome}</strong> · Mercado: <strong>{meuMercado}</strong></div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
             {meuMercado && (
@@ -330,7 +341,11 @@ export default function Sala() {
       <VariantesComparacao produtos={sala.produtos} precos={precos} mercados={mercados} grupoPorCodigo={grupoPorCodigo} />
       <ListaOtimizada produtos={sala.produtos} precos={precos} participantes={sala.participantes} />
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
-      {mostrarScanner && <BarcodeScanner onScan={handleScan} onClose={() => setMostrarScanner(false)} />}
+      {mostrarScanner && (
+        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>Carregando câmera...</div>}>
+          <BarcodeScanner onScan={handleScan} onClose={() => setMostrarScanner(false)} />
+        </Suspense>
+      )}
       {mostrarCadastro && <CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={() => setMostrarCadastro(null)} />}
       {mostrarProdutoModal && (
         <ProdutoModal

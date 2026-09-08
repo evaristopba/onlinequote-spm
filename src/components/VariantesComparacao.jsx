@@ -1,5 +1,6 @@
 import { infoPreco } from '../utils/precos.js'
 import { calcularPrecoPorUnidade, formatarMoeda } from '../utils/ptBR.js'
+import { chaveMercado } from '../utils/mercados.js'
 
 // Mostra, pra produtos da cotação já vinculados como variantes um do
 // outro na base (ex: creme dental 75g e 180g), qual tamanho sai mais em
@@ -13,7 +14,7 @@ export default function VariantesComparacao({ produtos, precos, mercados, grupoP
     if (!grupo) return
     let menor = Infinity
     mercados.forEach((m) => {
-      const v = infoPreco(precos[p.id]?.[m])?.preco
+      const v = infoPreco(precos[p.id]?.[chaveMercado(m)])?.preco
       if (v && v < menor) menor = v
     })
     if (menor === Infinity) return

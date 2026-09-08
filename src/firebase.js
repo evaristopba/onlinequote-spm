@@ -1,10 +1,14 @@
 import { initializeApp } from 'firebase/app'
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot,
-  arrayUnion, collection, query, where, getDocs, addDoc, runTransaction
+  arrayUnion, collection, query, where, getDocs, addDoc, runTransaction,
+  writeBatch, limit
 } from 'firebase/firestore'
+
+import { chaveMercado } from './utils/mercados.js'
 
 const cfg = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,6 +31,23 @@ if (miss.length > 0) {
   db = null
 } else {
   app = initializeApp(cfg)
+  // App Check é opcional (só ativa se VITE_RECAPTCHA_SITE_KEY existir) —
+  // ver README "App Check" pra como configurar. Mitiga script externo
+  // criando sessões/produtos em massa (login anônimo por si só não tem
+  // essa proteção). NUNCA ativar o "enforcement" no Firebase Console
+  // antes de confirmar que esse código está publicado e funcionando —
+  // enforcement num app sem o token sendo enviado derruba TODO mundo.
+  const chaveRecaptcha = import.meta.env.VITE_RECAPTCHA_SITE_KEY
+  if (chaveRecaptcha) {
+    try {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(chaveRecaptcha),
+        isTokenAutoRefreshEnabled: true,
+      })
+    } catch (e) {
+      console.warn('App Check nao inicializado:', e)
+    }
+  }
   auth = getAuth(app)
   try {
     db = initializeFirestore(app, {
@@ -131,7 +152,7 @@ export const gerarCodigo = () => {
 
 export const buscarProdutoBasePropria = async (codigoBarras) => {
   if (!db) throw new Error('Firebase nao inicializado')
-  const qry = query(collection(db, 'produtos'), where('codigoBarras', '==', codigoBarras), where('ativo', '==', true))
+  const qry = query(collection(db, 'produtos'), where('codigoBarras', '==', codigoBarras), where('ativo', '==', true), limit(1))
   const snap = await getDocs(qry)
   if (snap.empty) return null
   const d = snap.docs[0].data()
@@ -300,7 +321,14 @@ export const escutarSala = (codigo, cb) => {
     return () => {}
   }
   const ref = doc(db, 'salas', codigo)
-  return onSnapshot(ref, (s) => cb(s.exists() ? s.data() : null))
+  // includeMetadataChanges + segundo argumento do callback: dá pra
+  // mostrar "sincronizando..." enquanto uma escrita local ainda não
+  // confirmou no servidor (offline ou rede lenta) — sem isso, quem
+  // lança preço sem internet não tem como saber se já salvou de
+  // verdade ou se só está guardado localmente esperando reconexão.
+  return onSnapshot(ref, { includeMetadataChanges: true }, (s) =>
+    cb(s.exists() ? s.data() : null, { hasPendingWrites: s.metadata.hasPendingWrites, fromCache: s.metadata.fromCache })
+  )
 }
 
 export const lancarPreco = async (codigo, produtoId, mercado, preco, oferta = null) => {
@@ -324,12 +352,16 @@ export const escutarPrecos = (codigo, cb) => {
     return () => {}
   }
   const ref = collection(db, 'salas', codigo, 'precos')
-  return onSnapshot(ref, (snap) => {
+  return onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
     const precos = {}
     snap.forEach((docSnap) => {
       const d = docSnap.data()
       if (!precos[d.produtoId]) precos[d.produtoId] = {}
-      precos[d.produtoId][d.mercado] = {
+      // Chave normalizada (trim + minúsculas) — "Carrefour" e "carrefour"
+      // gravados por participantes diferentes precisam cair na MESMA
+      // entrada, senão o preço "some" mesmo a coluna aparecendo unificada
+      // na tabela (ver utils/mercados.js).
+      precos[d.produtoId][chaveMercado(d.mercado)] = {
         preco: d.preco,
         oferta: !!d.oferta,
         tipoOferta: d.tipoOferta || '',
@@ -337,12 +369,12 @@ export const escutarPrecos = (codigo, cb) => {
         atualizadoEm: d.atualizadoEm || null,
       }
     })
-    cb(precos)
+    cb(precos, { hasPendingWrites: snap.metadata.hasPendingWrites, fromCache: snap.metadata.fromCache })
   })
 }
 
 function sanitizarId(s) {
-  return String(s).trim().replace(/\//g, '_') || 'mercado'
+  return String(s).trim().toLowerCase().replace(/\//g, '_') || 'mercado'
 }
 
 export const editarProduto = async (codigo, produtoId, dadosNovos) => {
@@ -407,6 +439,17 @@ export const excluirSala = async (codigo) => {
   if (!db) throw new Error('Firebase nao inicializado')
   const precosRef = collection(db, 'salas', codigo, 'precos')
   const snap = await getDocs(precosRef)
-  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
+  const docs = snap.docs
+  // writeBatch em vez de Promise.all de deletes soltos: cada lote é
+  // atômico (tudo ou nada) e evita disparar centenas de requisições
+  // paralelas independentes numa sala com muitos produtos×mercados.
+  // 400 por lote, com folga do limite de 500 operações por batch do
+  // Firestore.
+  for (let i = 0; i < docs.length; i += 400) {
+    const lote = docs.slice(i, i + 400)
+    const batch = writeBatch(db)
+    lote.forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+  }
   await deleteDoc(doc(db, 'salas', codigo))
 }

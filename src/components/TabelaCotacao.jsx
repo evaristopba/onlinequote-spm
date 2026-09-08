@@ -1,5 +1,6 @@
 import { formatarInputPreco, formatarPrecoPorUnidade, calcularPrecoPorUnidade, formatarMoeda } from '../utils/ptBR.js'
 import { infoPreco } from '../utils/precos.js'
+import { chaveMercado, mercadosIguais, listarMercadosUnicos } from '../utils/mercados.js'
 
 export default function TabelaCotacao({
   produtos,
@@ -12,7 +13,7 @@ export default function TabelaCotacao({
   onEditarOferta,
   vazioTexto
 }) {
-  const mercados = [...new Set(Object.values(participantes).map(p => p.mercado))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  const mercados = listarMercadosUnicos(participantes).sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
   if (!produtos || produtos.length === 0) {
     return <p style={{ color: '#94a3b8', textAlign: 'center', padding: '24px 0', fontSize: '0.9rem' }}>{vazioTexto || 'Nenhum produto por aqui ainda.'}</p>
@@ -27,7 +28,7 @@ export default function TabelaCotacao({
             {mercados.map(m => (
               <th key={m} style={th}>
                 {m}
-                {m === meuMercado && <span style={{ color: '#3b82f6' }}> (você)</span>}
+                {mercadosIguais(m, meuMercado) && <span style={{ color: '#3b82f6' }}> (você)</span>}
               </th>
             ))}
             <th style={th}>Menor Preço</th>
@@ -41,7 +42,7 @@ export default function TabelaCotacao({
             let unidadeBase = ''
 
             mercados.forEach(m => {
-              const info = infoPreco(precos[p.id]?.[m])
+              const info = infoPreco(precos[p.id]?.[chaveMercado(m)])
               if (info && info.preco && info.preco < menor) {
                 menor = info.preco
                 mercMenor = m
@@ -95,11 +96,11 @@ export default function TabelaCotacao({
                   </div>
                 </td>
                 {mercados.map(m => {
-                  const info = infoPreco(precos[p.id]?.[m])
+                  const info = infoPreco(precos[p.id]?.[chaveMercado(m)])
                   const v = info?.preco
                   const best = m === mercMenor && menor !== Infinity
                   const bestCusto = m === mercMelhorCusto && melhorCusto !== Infinity && m !== mercMenor
-                  const mine = m === meuMercado
+                  const mine = mercadosIguais(m, meuMercado)
 
                   let precoUnidadeDisplay = null
                   if (v && p.quantidade) {
@@ -213,7 +214,7 @@ export default function TabelaCotacao({
           })}
         </tbody>
       </table>
-      {!mercados.includes(meuMercado) && (
+      {!mercados.some(m => mercadosIguais(m, meuMercado)) && (
         <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 8 }}>
           Você ainda não está associado a nenhum mercado nessa sala.
         </p>

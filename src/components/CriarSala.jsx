@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { criarSala, buscarProdutoBasePropria, lancarPreco, buscarProdutosPorNome } from '../firebase.js'
 import { buscarProdutoPorCodigo } from '../utils/barcode.js'
-import BarcodeScanner from './BarcodeScanner.jsx'
+// html5-qrcode é pesada e só serve pra quem realmente escaneia — lazy
+// evita jogar isso no bundle inicial de todo mundo.
+const BarcodeScanner = lazy(() => import('./BarcodeScanner.jsx'))
 import CadastrarProduto from './CadastrarProduto.jsx'
 import ProdutoModal from './ProdutoModal.jsx'
 import { formatarQuantidade, parseQuantidadeExistente } from '../utils/ptBR.js'
@@ -186,7 +188,7 @@ export default function CriarSala() {
     if (produtos.length === 0) { avisar('Adicione pelo menos um produto'); return }
     setCarregando(true)
     try {
-      const c = await criarSala(nomeSala || 'Cotação', produtos, nome, mercado)
+      const c = await criarSala(nomeSala || 'Cotação', produtos, nome.trim(), mercado.trim())
       await Promise.all(produtos.map((p, i) => p.preco != null ? lancarPreco(c, `p${i}`, mercado, p.preco) : null))
       nav(`/sala/${c}`)
     } catch (e) { avisar('Erro: ' + e.message); setCarregando(false) }
@@ -325,7 +327,11 @@ export default function CriarSala() {
       <button onClick={handleCriar} disabled={carregando} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '1rem', opacity: carregando ? 0.6 : 1 }}>
         {carregando ? 'Criando...' : '🚀 Criar Sala'}
       </button>
-      {mostrarScanner && <BarcodeScanner onScan={handleScan} onClose={() => setMostrarScanner(false)} />}
+      {mostrarScanner && (
+        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>Carregando câmera...</div>}>
+          <BarcodeScanner onScan={handleScan} onClose={() => setMostrarScanner(false)} />
+        </Suspense>
+      )}
       {mostrarCadastro && <CadastrarProduto dadosIniciais={mostrarCadastro} onSalvo={handleSalvoNaBase} onCancelar={() => setMostrarCadastro(null)} />}
       {mostrarProdutoModal && (
         <ProdutoModal

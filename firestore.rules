@@ -7,8 +7,24 @@ service cloud.firestore {
     // Cada documento = uma sala de cotação
     // ============================================
     match /salas/{salaId} {
-      // Leitura e criação livres para qualquer usuário autenticado.
-      allow read, create: if request.auth != null;
+      // get = buscar UMA sala específica pelo código (é o modelo do app:
+      // "quem tem o código, acessa" — inclusive pra conferir se um
+      // código existe antes de entrar, sem ainda ser participante).
+      allow get: if request.auth != null;
+
+      // list = consultar a coleção sem um código específico. Sem essa
+      // separação, "allow read" também liberava list, e qualquer
+      // usuário anônimo conseguia enumerar TODAS as salas do banco (só
+      // com getDocs(collection(db,'salas')), sem precisar de código
+      // nenhum). Agora só quem já é participante consegue listar as
+      // PRÓPRIAS salas (usado por listarMinhasSalas), e só o admin
+      // consegue listar todas (usado por listarTodasSalas no /admin).
+      allow list: if request.auth != null && (
+        request.auth.uid in resource.data.participantes
+        || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+
+      allow create: if request.auth != null;
 
       // Update NÃO é mais livre. Baseado no que o app realmente faz com
       // updateDoc()/transação na sala, só duas coisas podem mudar de cada

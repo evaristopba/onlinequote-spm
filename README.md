@@ -81,6 +81,20 @@ O painel administrativo (`/admin`) permite excluir **qualquer** sala do banco (n
 
 > Sem esse setup, a rota `/admin` mostra a tela de login mas ninguém consegue fazer nada nela — as regras do Firestore bloqueiam qualquer exclusão de sala alheia ou remoção definitiva de produto pra quem não tiver um documento em `admins/<uid>`.
 
+### 8. App Check (opcional, recomendado antes de divulgar o app)
+
+Login anônimo aberto significa que, tecnicamente, um script fora do navegador (não uma pessoa usando o app de verdade) consegue chamar as mesmas APIs do Firebase e criar milhares de sessões, salas ou produtos falsos. O [App Check](https://firebase.google.com/docs/app-check) resolve isso: só libera as chamadas ao Firestore/Auth se vierem do seu app de verdade, rodando num navegador de verdade.
+
+**⚠️ Ordem importa — siga exatamente assim, nessa sequência:**
+
+1. Firebase Console → **App Check** → registre um provedor **reCAPTCHA v3** para o seu app web → copie a **chave do site** (site key)
+2. Coloque essa chave em `VITE_RECAPTCHA_SITE_KEY` no `.env` (e nas variáveis de ambiente do Vercel)
+3. Faça o **deploy** com essa variável configurada
+4. Volte no Firebase Console → App Check → confira, na aba de métricas, se as requisições do app estão chegando como **verificadas** (pode levar alguns minutos)
+5. **Só depois de confirmar isso**, vá em Firestore Database → App Check → e ative o **modo de aplicação (enforcement)**
+
+> Se você ativar o enforcement no passo 5 **antes** de confirmar o passo 4, o app para de funcionar pra todo mundo (inclusive você) até reverter. A chave do reCAPTCHA sozinha não faz nada — ela só tem efeito depois que o enforcement é ligado.
+
 ---
 
 ## 📷 Scanner — Fluxo Híbrido
