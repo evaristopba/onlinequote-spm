@@ -40,6 +40,30 @@ function App() {
     return () => unsub()
   }, [])
 
+  const handleBaixarZip = async (e) => {
+    e?.preventDefault?.()
+    try {
+      const res = await fetch('/cotacao-online.zip')
+      if (!res.ok) throw new Error('Status ' + res.status)
+      const blob = await res.blob()
+      if (blob.size < 20000) {
+        alert('Atenção: O download foi interceptado pelo proxy do navegador (' + blob.size + ' bytes). Use a opção de exportar pelo menu do AI Studio!')
+        return
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'cotacao-online.zip'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
+    } catch (err) {
+      console.error('Erro ao baixar zip:', err)
+      window.open('/cotacao-online.zip', '_blank')
+    }
+  }
+
   if (erro && !ignorarErro) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '24px', textAlign: 'center', color: '#64748b' }}>
@@ -55,10 +79,9 @@ function App() {
             Entrar em modo demonstração
           </button>
           {import.meta.env.DEV && (
-            <a
+            <button
               id="btn-download-error-screen"
-              href="/cotacao-online.zip"
-              download="cotacao-online.zip"
+              onClick={handleBaixarZip}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -73,11 +96,10 @@ function App() {
                 fontSize: '0.9rem',
                 cursor: 'pointer',
                 marginTop: 6,
-                textDecoration: 'none',
               }}
             >
               📦 Baixar Projeto (.zip)
-            </a>
+            </button>
           )}
         </div>
       </div>
@@ -100,10 +122,9 @@ function App() {
 
       {/* Botão flutuante para download rápido em desenvolvimento */}
       {import.meta.env.DEV && (
-        <a
+        <button
           id="btn-download-flutuante"
-          href="/cotacao-online.zip"
-          download="cotacao-online.zip"
+          onClick={handleBaixarZip}
           title="Baixar código fonte empacotado para o Git"
           style={{
             position: 'fixed',
@@ -122,11 +143,10 @@ function App() {
             alignItems: 'center',
             gap: 8,
             border: '1px solid #334155',
-            textDecoration: 'none',
           }}
         >
           📦 Baixar .ZIP
-        </a>
+        </button>
       )}
     </>
   )

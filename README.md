@@ -175,17 +175,27 @@ Na tela da sala há duas visões da tabela:
 
 ---
 
-## 🔁 Comparar tamanhos/embalagens (novo)
+## 🔁 Comparar tamanhos/embalagens & Vínculo de Variantes
 
-Pra decidir se compensa levar 1 pacote grande em vez de 2 pequenos (ex.: creme dental 75g vs 180g), vincule os dois na base própria:
+Pra combater a "falsa promoção" e decidir se realmente compensa levar embalagens maiores ou kits econômicos (ex.: sabão em pó 800g vs 1,6kg vs 2,4kg; creme dental 70g vs 180g; amaciante 500ml vs 1L):
 
-1. **🛠️ Manutenção de Produtos** → ache o produto → **🔗 Variante** → busque o outro tamanho pelo nome e vincule
-2. O vínculo (`grupoVariante`) fica salvo na base — não precisa refazer em cada cotação
-3. Quando os dois produtos vinculados estiverem na **mesma cotação** e já tiverem **pelo menos um preço lançado**, aparece o bloco **"🔁 Comparar tamanhos/embalagens"** na tela da sala, com o custo por kg/L de cada um lado a lado e o mais em conta destacado
+### Como funciona o vínculo:
+1. **🛠️ Manutenção de Produtos** (ou no próprio card/modal do produto) → localize o item → clique em **🔗 Variante**.
+2. Busque pelo nome a outra embalagem/versão já cadastrada e clique em **Vincular**.
+3. O identificador comum (`grupoVariante`) fica registrado no Firestore — **não precisa refazer em cada nova cotação**.
+4. Se você vincular um item a outro que já pertence a uma família de variantes, o sistema **funde os grupos automaticamente** sem perder os vínculos anteriores.
+5. Para remover um produto do grupo, basta clicar em **✂️ Desvincular**.
 
-Pra desvincular, use **✂️ Desvincular** na Manutenção. Vincular um produto que já tem outra variante a um terceiro funde os grupos automaticamente, sem perder nenhum vínculo já feito.
+### Como ajuda na cotação:
+Quando dois ou mais produtos de um mesmo grupo de variantes entram na **mesma sala de cotação** e recebem preços dos mercados:
+1. **Normalização Automática de Unidade**: O app converte gramas para **Quilogramas (kg)** e mililitros para **Litros (L)**.
+2. **Custo Real Relativo**: Calcula o valor exato por kg ou L para cada opção pesquisada:
+   * *Exemplo*: Frasco 500ml por R$ 9,90 = **R$ 19,80 / L**
+   * *Exemplo*: Refil 1 Litro por R$ 16,50 = **R$ 16,50 / L**
+3. **Selo Troféu 🏆**: O produto com menor custo unitário real recebe o troféu verde de destaque.
+4. **Cálculo de Economia**: A tela exibe um alerta automático indicando a economia percentual exata (ex.: *"💡 Levar Refil 1L sai até 17% mais em conta por Litro do que Frasco 500ml"*).
 
-> É um vínculo **manual** por escolha — o app não tenta adivinhar por semelhança de nome, porque isso arriscaria juntar produtos diferentes por engano.
+> **Por que é manual?** A decisão de equivalência é do usuário: o sistema não tenta adivinhar por semelhança de texto, evitando unir acidentalmente marcas ou fórmulas com qualidades diferentes.
 
 ---
 
