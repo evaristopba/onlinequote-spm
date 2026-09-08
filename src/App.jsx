@@ -9,8 +9,6 @@ import MinhasSalas from './components/MinhasSalas.jsx'
 import ManutencaoProdutos from './components/ManutencaoProdutos.jsx'
 import Admin from './components/Admin.jsx'
 
-import { baixarProjetoZip } from './utils/downloadZip.js'
-
 function App() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState(null)
@@ -57,9 +55,10 @@ function App() {
             Entrar em modo demonstração
           </button>
           {import.meta.env.DEV && (
-            <button
+            <a
               id="btn-download-error-screen"
-              onClick={baixarProjetoZip}
+              href="/cotacao-online.zip"
+              download="cotacao-online.zip"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -74,10 +73,11 @@ function App() {
                 fontSize: '0.9rem',
                 cursor: 'pointer',
                 marginTop: 6,
+                textDecoration: 'none',
               }}
             >
               📦 Baixar Projeto (.zip)
-            </button>
+            </a>
           )}
         </div>
       </div>
@@ -100,9 +100,10 @@ function App() {
 
       {/* Botão flutuante para download rápido em desenvolvimento */}
       {import.meta.env.DEV && (
-        <button
+        <a
           id="btn-download-flutuante"
-          onClick={baixarProjetoZip}
+          href="/cotacao-online.zip"
+          download="cotacao-online.zip"
           title="Baixar código fonte empacotado para o Git"
           style={{
             position: 'fixed',
@@ -121,10 +122,11 @@ function App() {
             alignItems: 'center',
             gap: 8,
             border: '1px solid #334155',
+            textDecoration: 'none',
           }}
         >
           📦 Baixar .ZIP
-        </button>
+        </a>
       )}
     </>
   )
