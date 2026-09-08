@@ -9,132 +9,144 @@ import {
 } from 'firebase/firestore'
 
 import { chaveMercado } from './utils/mercados.js'
+import {
+  mockAuth,
+  mockLoginAnonimo,
+  mockObservarAuth,
+  mockLoginAdmin,
+  mockLogoutAdmin,
+  mockSouAdmin,
+  mockListarTodasSalas,
+  mockApagarProdutoDeVez,
+  mockRemoverParticipanteAdmin,
+  mockGerarCodigo,
+  mockBuscarProdutoBasePropria,
+  mockBuscarProdutosPorNome,
+  mockSalvarProdutoBasePropria,
+  mockListarBasePropria,
+  mockEditarProdutoBasePropria,
+  mockBuscarProdutoPorId,
+  mockVincularVariante,
+  mockDesvincularVariante,
+  mockDefinirAtivoBasePropria,
+  mockCriarSala,
+  mockEntrarSala,
+  mockEscutarSala,
+  mockLancarPreco,
+  mockEscutarPrecos,
+  mockEditarProduto,
+  mockRemoverProduto,
+  mockAdicionarProduto,
+  mockListarMinhasSalas,
+  mockExcluirSala,
+} from './utils/mockStore.js'
 
 const cfg = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || import.meta.env.FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || import.meta.env.FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || import.meta.env.FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || import.meta.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || import.meta.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || import.meta.env.FIREBASE_APP_ID,
 }
 
 const miss = Object.entries(cfg).filter(([, v]) => !v).map(([k]) => k)
 
-let app, auth, db
+export const isFirebaseConfigured = miss.length === 0
 
-if (miss.length > 0) {
-  console.error('Firebase config incompleta. Variaveis ausentes:', miss.join(', '))
-  console.error('Verifique se o arquivo .env existe na raiz do projeto e se o servidor foi reiniciado.')
-  app = null
-  auth = null
-  db = null
+let app = null
+let realAuth = null
+let realDb = null
+
+if (!isFirebaseConfigured) {
+  console.warn('[AI Studio] Firebase config ausente no .env (' + miss.join(', ') + '). Utilizando modo em memória/local para o preview.')
 } else {
-  app = initializeApp(cfg)
-  // App Check é opcional (só ativa se VITE_RECAPTCHA_SITE_KEY existir) —
-  // ver README "App Check" pra como configurar. Mitiga script externo
-  // criando sessões/produtos em massa (login anônimo por si só não tem
-  // essa proteção). NUNCA ativar o "enforcement" no Firebase Console
-  // antes de confirmar que esse código está publicado e funcionando —
-  // enforcement num app sem o token sendo enviado derruba TODO mundo.
-  const chaveRecaptcha = import.meta.env.VITE_RECAPTCHA_SITE_KEY
-  if (chaveRecaptcha) {
+  try {
+    app = initializeApp(cfg)
+    const chaveRecaptcha = import.meta.env.VITE_RECAPTCHA_SITE_KEY
+    if (chaveRecaptcha) {
+      try {
+        initializeAppCheck(app, {
+          provider: new ReCaptchaV3Provider(chaveRecaptcha),
+          isTokenAutoRefreshEnabled: true,
+        })
+      } catch (e) {
+        console.warn('App Check nao inicializado:', e)
+      }
+    }
+    realAuth = getAuth(app)
     try {
-      initializeAppCheck(app, {
-        provider: new ReCaptchaV3Provider(chaveRecaptcha),
-        isTokenAutoRefreshEnabled: true,
+      realDb = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
       })
     } catch (e) {
-      console.warn('App Check nao inicializado:', e)
+      console.warn('Cache offline indisponivel, seguindo sem persistencia:', e)
+      realDb = initializeFirestore(app, {})
     }
-  }
-  auth = getAuth(app)
-  try {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-    })
   } catch (e) {
-    console.warn('Cache offline indisponivel, seguindo sem persistencia:', e)
-    db = initializeFirestore(app, {})
+    console.error('Falha ao inicializar Firebase:', e)
   }
 }
 
-export { auth, db }
+export const auth = isFirebaseConfigured && realAuth ? realAuth : mockAuth
+export const db = isFirebaseConfigured && realDb ? realDb : {}
 
 export const loginAnonimo = () => {
-  if (!auth) return Promise.reject(new Error('Firebase nao inicializado. Verifique o arquivo .env.'))
-  // Se já existe uma sessão (anônima OU de admin logado com e-mail/senha),
-  // não sobrescreve — signInAnonymously() trocaria até uma sessão de admin
-  // por uma anônima nova sem avisar. Quem decide QUANDO chamar isso é o
-  // App.jsx, via observarAuth().
-  if (auth.currentUser) return Promise.resolve(auth.currentUser)
-  return setPersistence(auth, browserLocalPersistence)
-    .then(() => signInAnonymously(auth))
+  if (!isFirebaseConfigured) return mockLoginAnonimo()
+  if (!realAuth) return Promise.reject(new Error('Firebase nao inicializado.'))
+  if (realAuth.currentUser) return Promise.resolve(realAuth.currentUser)
+  return setPersistence(realAuth, browserLocalPersistence)
+    .then(() => signInAnonymously(realAuth))
 }
 
-// Observa mudanças de sessão (login/logout, restauração ao abrir o app).
-// Usado pelo App.jsx pra decidir se precisa logar anônimo ou se já existe
-// uma sessão válida (inclusive uma sessão de admin persistida).
 export const observarAuth = (cb) => {
-  if (!auth) return () => {}
-  return onAuthStateChanged(auth, cb)
+  if (!isFirebaseConfigured) return mockObservarAuth(cb)
+  if (!realAuth) return () => {}
+  return onAuthStateChanged(realAuth, cb)
 }
 
-// ===== Painel Admin (login real, e-mail/senha) =====
-// O admin é reconhecido por um documento em admins/{uid} — cada usuário
-// só pode ler o PRÓPRIO documento (pra souAdmin() conferir), nunca
-// escrever nada ali (isso só é feito manualmente no Firebase Console).
 export const loginAdmin = (email, senha) => {
-  if (!auth) return Promise.reject(new Error('Firebase nao inicializado'))
-  return signInWithEmailAndPassword(auth, email, senha)
+  if (!isFirebaseConfigured) return mockLoginAdmin(email, senha)
+  if (!realAuth) return Promise.reject(new Error('Firebase nao inicializado'))
+  return signInWithEmailAndPassword(realAuth, email, senha)
 }
 
 export const logoutAdmin = async () => {
-  if (!auth) return
-  await signOut(auth)
+  if (!isFirebaseConfigured) return mockLogoutAdmin()
+  if (!realAuth) return
+  await signOut(realAuth)
   await loginAnonimo()
 }
 
 export const souAdmin = async () => {
-  if (!db || !auth?.currentUser) return false
+  if (!isFirebaseConfigured) return mockSouAdmin()
+  if (!realDb || !realAuth?.currentUser) return false
   try {
-    const snap = await getDoc(doc(db, 'admins', auth.currentUser.uid))
+    const snap = await getDoc(doc(realDb, 'admins', realAuth.currentUser.uid))
     return snap.exists()
   } catch (e) {
     return false
   }
 }
 
-// Lista TODAS as salas do banco (não só as do usuário atual) — só
-// funciona de verdade se as regras permitirem o delete/gerência pra
-// quem chama; usada pelo painel admin.
 export const listarTodasSalas = async () => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const snap = await getDocs(collection(db, 'salas'))
+  if (!isFirebaseConfigured) return mockListarTodasSalas()
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const snap = await getDocs(collection(realDb, 'salas'))
   return snap.docs.map((d) => ({ codigo: d.id, ...d.data() }))
 }
 
-// Apaga um produto DE VEZ da base própria (diferente de
-// definirAtivoBasePropria, que só desativa). Só admins conseguem — a
-// regra do Firestore bloqueia isso pra qualquer outro usuário. Não
-// verifica se o produto está referenciado em cotações ativas; se
-// estiver, essas cotações passam a mostrar um item "órfão" (sem
-// cadastro na base) — use com cuidado.
 export const apagarProdutoDeVez = async (id) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  await deleteDoc(doc(db, 'produtos', id))
+  if (!isFirebaseConfigured) return mockApagarProdutoDeVez(id)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  await deleteDoc(doc(realDb, 'produtos', id))
 }
 
-// Remove UMA entrada específica de participante de uma sala (por uid) —
-// usado pra limpar sessões fantasma (mesma pessoa reabrindo o link
-// pessoal em navegadores/aparelhos diferentes, cada um vira um uid novo
-// e uma entrada nova). Só admin consegue: a regra de update de `salas`
-// só deixa cada participante mexer na PRÓPRIA entrada, então remover a
-// entrada de outra pessoa exige o bypass de admin.
 export const removerParticipanteAdmin = async (codigo, uidParticipante) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const salaRef = doc(db, 'salas', codigo)
-  await runTransaction(db, async (tx) => {
+  if (!isFirebaseConfigured) return mockRemoverParticipanteAdmin(codigo, uidParticipante)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const salaRef = doc(realDb, 'salas', codigo)
+  await runTransaction(realDb, async (tx) => {
     const snap = await tx.get(salaRef)
     if (!snap.exists()) throw new Error('Sala nao encontrada')
     const participantes = { ...(snap.data().participantes || {}) }
@@ -144,6 +156,7 @@ export const removerParticipanteAdmin = async (codigo, uidParticipante) => {
 }
 
 export const gerarCodigo = () => {
+  if (!isFirebaseConfigured) return mockGerarCodigo()
   const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let r = ''
   for (let i = 0; i < 6; i++) r += c[Math.floor(Math.random() * c.length)]
@@ -151,8 +164,9 @@ export const gerarCodigo = () => {
 }
 
 export const buscarProdutoBasePropria = async (codigoBarras) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const qry = query(collection(db, 'produtos'), where('codigoBarras', '==', codigoBarras), where('ativo', '==', true), limit(1))
+  if (!isFirebaseConfigured) return mockBuscarProdutoBasePropria(codigoBarras)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const qry = query(collection(realDb, 'produtos'), where('codigoBarras', '==', codigoBarras), where('ativo', '==', true), limit(1))
   const snap = await getDocs(qry)
   if (snap.empty) return null
   const d = snap.docs[0].data()
@@ -160,11 +174,12 @@ export const buscarProdutoBasePropria = async (codigoBarras) => {
 }
 
 export const buscarProdutosPorNome = async (termo, limite = 10) => {
-  if (!db) throw new Error('Firebase nao inicializado')
+  if (!isFirebaseConfigured) return mockBuscarProdutosPorNome(termo, limite)
+  if (!realDb) throw new Error('Firebase nao inicializado')
   if (!termo || termo.length < 2) return []
   const termoLower = termo.toLowerCase().trim()
   try {
-    const qry = query(collection(db, 'produtos'), where('ativo', '==', true))
+    const qry = query(collection(realDb, 'produtos'), where('ativo', '==', true))
     const snap = await getDocs(qry)
     const resultados = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
@@ -179,8 +194,9 @@ export const buscarProdutosPorNome = async (termo, limite = 10) => {
 }
 
 export const salvarProdutoBasePropria = async (dados) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const docRef = await addDoc(collection(db, 'produtos'), {
+  if (!isFirebaseConfigured) return mockSalvarProdutoBasePropria(dados)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const docRef = await addDoc(collection(realDb, 'produtos'), {
     codigoBarras: dados.codigoBarras,
     nome: dados.nome,
     marca: dados.marca || '',
@@ -190,20 +206,22 @@ export const salvarProdutoBasePropria = async (dados) => {
     imagem: dados.imagem || null,
     ativo: true,
     cadastradoEm: new Date().toISOString(),
-    cadastradoPor: auth?.currentUser?.uid || null,
+    cadastradoPor: realAuth?.currentUser?.uid || null,
   })
   return docRef.id
 }
 
 export const listarBasePropria = async () => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const snap = await getDocs(collection(db, 'produtos'))
+  if (!isFirebaseConfigured) return mockListarBasePropria()
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const snap = await getDocs(collection(realDb, 'produtos'))
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
 }
 
 export const editarProdutoBasePropria = async (id, dados) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  await updateDoc(doc(db, 'produtos', id), {
+  if (!isFirebaseConfigured) return mockEditarProdutoBasePropria(id, dados)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  await updateDoc(doc(realDb, 'produtos', id), {
     nome: dados.nome,
     marca: dados.marca || '',
     categoria: dados.categoria || 'Outros',
@@ -213,30 +231,26 @@ export const editarProdutoBasePropria = async (id, dados) => {
 }
 
 export const buscarProdutoPorId = async (id) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const snap = await getDoc(doc(db, 'produtos', id))
+  if (!isFirebaseConfigured) return mockBuscarProdutoPorId(id)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const snap = await getDoc(doc(realDb, 'produtos', id))
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-// Liga dois produtos da base própria como "variantes" um do outro (mesmo
-// produto, tamanho/embalagem diferente — ex: creme dental 75g e 180g).
-// Usa um campo compartilhado `grupoVariante`: se um dos dois já pertence
-// a um grupo, o outro entra nesse grupo; se os dois já tiverem grupos
-// DIFERENTES (cada um já linkado com outros produtos), os dois grupos
-// são fundidos em um só, pra não perder vínculos já feitos.
 export const vincularVariante = async (idA, idB) => {
-  if (!db) throw new Error('Firebase nao inicializado')
+  if (!isFirebaseConfigured) return mockVincularVariante(idA, idB)
+  if (!realDb) throw new Error('Firebase nao inicializado')
   if (idA === idB) throw new Error('Selecione dois produtos diferentes')
   const [snapA, snapB] = await Promise.all([
-    getDoc(doc(db, 'produtos', idA)),
-    getDoc(doc(db, 'produtos', idB)),
+    getDoc(doc(realDb, 'produtos', idA)),
+    getDoc(doc(realDb, 'produtos', idB)),
   ])
   if (!snapA.exists() || !snapB.exists()) throw new Error('Produto não encontrado')
   const grupoA = snapA.data().grupoVariante || null
   const grupoB = snapB.data().grupoVariante || null
 
   if (grupoA && grupoB && grupoA !== grupoB) {
-    const qGrupoB = query(collection(db, 'produtos'), where('grupoVariante', '==', grupoB))
+    const qGrupoB = query(collection(realDb, 'produtos'), where('grupoVariante', '==', grupoB))
     const snapGrupoB = await getDocs(qGrupoB)
     await Promise.all(snapGrupoB.docs.map((d) => updateDoc(d.ref, { grupoVariante: grupoA })))
     return grupoA
@@ -244,31 +258,33 @@ export const vincularVariante = async (idA, idB) => {
 
   const grupo = grupoA || grupoB || `grp_${idA}`
   await Promise.all([
-    updateDoc(doc(db, 'produtos', idA), { grupoVariante: grupo }),
-    updateDoc(doc(db, 'produtos', idB), { grupoVariante: grupo }),
+    updateDoc(doc(realDb, 'produtos', idA), { grupoVariante: grupo }),
+    updateDoc(doc(realDb, 'produtos', idB), { grupoVariante: grupo }),
   ])
   return grupo
 }
 
-// Remove só este produto do grupo de variantes (os outros continuam ligados).
 export const desvincularVariante = async (id) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  await updateDoc(doc(db, 'produtos', id), { grupoVariante: null })
+  if (!isFirebaseConfigured) return mockDesvincularVariante(id)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  await updateDoc(doc(realDb, 'produtos', id), { grupoVariante: null })
 }
 
 export const definirAtivoBasePropria = async (id, ativo) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  await updateDoc(doc(db, 'produtos', id), { ativo })
+  if (!isFirebaseConfigured) return mockDefinirAtivoBasePropria(id, ativo)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  await updateDoc(doc(realDb, 'produtos', id), { ativo })
 }
 
 export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado) => {
-  if (!db || !auth) throw new Error('Firebase nao inicializado')
-  const user = auth.currentUser
+  if (!isFirebaseConfigured) return mockCriarSala(nomeSala, produtos, criadorNome, criadorMercado)
+  if (!realDb || !realAuth) throw new Error('Firebase nao inicializado')
+  const user = realAuth.currentUser
   if (!user) throw new Error('Nao autenticado')
   let codigo, salaRef, snap, tentativas = 0
   do {
     codigo = gerarCodigo()
-    salaRef = doc(db, 'salas', codigo)
+    salaRef = doc(realDb, 'salas', codigo)
     snap = await getDoc(salaRef)
     tentativas++
   } while (snap.exists() && tentativas < 5)
@@ -299,9 +315,10 @@ export const criarSala = async (nomeSala, produtos, criadorNome, criadorMercado)
 }
 
 export const entrarSala = async (codigo, nome, mercado) => {
-  if (!db || !auth) throw new Error('Firebase nao inicializado')
-  const user = auth.currentUser
-  const salaRef = doc(db, 'salas', codigo)
+  if (!isFirebaseConfigured) return mockEntrarSala(codigo, nome, mercado)
+  if (!realDb || !realAuth) throw new Error('Firebase nao inicializado')
+  const user = realAuth.currentUser
+  const salaRef = doc(realDb, 'salas', codigo)
   const snap = await getDoc(salaRef)
   if (!snap.exists()) throw new Error('Sala nao encontrada.')
   await updateDoc(salaRef, {
@@ -316,51 +333,45 @@ export const entrarSala = async (codigo, nome, mercado) => {
 }
 
 export const escutarSala = (codigo, cb) => {
-  if (!db) {
+  if (!isFirebaseConfigured) return mockEscutarSala(codigo, cb)
+  if (!realDb) {
     console.error('Firebase nao inicializado')
     return () => {}
   }
-  const ref = doc(db, 'salas', codigo)
-  // includeMetadataChanges + segundo argumento do callback: dá pra
-  // mostrar "sincronizando..." enquanto uma escrita local ainda não
-  // confirmou no servidor (offline ou rede lenta) — sem isso, quem
-  // lança preço sem internet não tem como saber se já salvou de
-  // verdade ou se só está guardado localmente esperando reconexão.
+  const ref = doc(realDb, 'salas', codigo)
   return onSnapshot(ref, { includeMetadataChanges: true }, (s) =>
     cb(s.exists() ? s.data() : null, { hasPendingWrites: s.metadata.hasPendingWrites, fromCache: s.metadata.fromCache })
   )
 }
 
 export const lancarPreco = async (codigo, produtoId, mercado, preco, oferta = null) => {
-  if (!db) throw new Error('Firebase nao inicializado')
+  if (!isFirebaseConfigured) return mockLancarPreco(codigo, produtoId, mercado, preco, oferta)
+  if (!realDb) throw new Error('Firebase nao inicializado')
   const precoId = `${produtoId}__${sanitizarId(mercado)}`
-  await setDoc(doc(db, 'salas', codigo, 'precos', precoId), {
+  await setDoc(doc(realDb, 'salas', codigo, 'precos', precoId), {
     produtoId,
     mercado,
     preco: parseFloat(preco),
     oferta: !!(oferta && oferta.tipo),
     tipoOferta: (oferta && oferta.tipo) || '',
     obsOferta: (oferta && oferta.obs) || '',
-    atualizadoPor: auth?.currentUser?.uid || null,
+    atualizadoPor: realAuth?.currentUser?.uid || null,
     atualizadoEm: new Date().toISOString(),
   })
 }
 
 export const escutarPrecos = (codigo, cb) => {
-  if (!db) {
+  if (!isFirebaseConfigured) return mockEscutarPrecos(codigo, cb)
+  if (!realDb) {
     console.error('Firebase nao inicializado')
     return () => {}
   }
-  const ref = collection(db, 'salas', codigo, 'precos')
+  const ref = collection(realDb, 'salas', codigo, 'precos')
   return onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
     const precos = {}
     snap.forEach((docSnap) => {
       const d = docSnap.data()
       if (!precos[d.produtoId]) precos[d.produtoId] = {}
-      // Chave normalizada (trim + minúsculas) — "Carrefour" e "carrefour"
-      // gravados por participantes diferentes precisam cair na MESMA
-      // entrada, senão o preço "some" mesmo a coluna aparecendo unificada
-      // na tabela (ver utils/mercados.js).
       precos[d.produtoId][chaveMercado(d.mercado)] = {
         preco: d.preco,
         oferta: !!d.oferta,
@@ -378,9 +389,10 @@ function sanitizarId(s) {
 }
 
 export const editarProduto = async (codigo, produtoId, dadosNovos) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const salaRef = doc(db, 'salas', codigo)
-  await runTransaction(db, async (tx) => {
+  if (!isFirebaseConfigured) return mockEditarProduto(codigo, produtoId, dadosNovos)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const salaRef = doc(realDb, 'salas', codigo)
+  await runTransaction(realDb, async (tx) => {
     const snap = await tx.get(salaRef)
     if (!snap.exists()) throw new Error('Sala nao encontrada')
     const produtos = snap.data().produtos || []
@@ -393,17 +405,18 @@ export const editarProduto = async (codigo, produtoId, dadosNovos) => {
 }
 
 export const removerProduto = async (codigo, produtoId) => {
-  if (!db) throw new Error('Firebase nao inicializado')
+  if (!isFirebaseConfigured) return mockRemoverProduto(codigo, produtoId)
+  if (!realDb) throw new Error('Firebase nao inicializado')
   try {
-    const precosRef = collection(db, 'salas', codigo, 'precos')
+    const precosRef = collection(realDb, 'salas', codigo, 'precos')
     const qry = query(precosRef, where('produtoId', '==', produtoId))
     const snap = await getDocs(qry)
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
   } catch (e) {
     console.error('Erro ao limpar precos do produto removido:', e)
   }
-  const salaRef = doc(db, 'salas', codigo)
-  await runTransaction(db, async (tx) => {
+  const salaRef = doc(realDb, 'salas', codigo)
+  await runTransaction(realDb, async (tx) => {
     const snap = await tx.get(salaRef)
     if (!snap.exists()) throw new Error('Sala nao encontrada')
     const produtos = (snap.data().produtos || []).filter((p) => p.id !== produtoId)
@@ -412,9 +425,10 @@ export const removerProduto = async (codigo, produtoId) => {
 }
 
 export const adicionarProduto = async (codigo, nome, quantidade, unidade, codigoBarras = null, categoria = 'Outros') => {
-  if (!db) throw new Error('Firebase nao inicializado')
+  if (!isFirebaseConfigured) return mockAdicionarProduto(codigo, nome, quantidade, unidade, codigoBarras, categoria)
+  if (!realDb) throw new Error('Firebase nao inicializado')
   const id = `p${Date.now()}`
-  await updateDoc(doc(db, 'salas', codigo), {
+  await updateDoc(doc(realDb, 'salas', codigo), {
     produtos: arrayUnion({ 
       id, 
       nome, 
@@ -428,28 +442,25 @@ export const adicionarProduto = async (codigo, nome, quantidade, unidade, codigo
 }
 
 export const listarMinhasSalas = async () => {
-  if (!db || !auth?.currentUser) throw new Error('Nao autenticado')
-  const uid = auth.currentUser.uid
-  const qry = query(collection(db, 'salas'), where(`participantes.${uid}.uid`, '==', uid))
+  if (!isFirebaseConfigured) return mockListarMinhasSalas()
+  if (!realDb || !realAuth?.currentUser) throw new Error('Nao autenticado')
+  const uid = realAuth.currentUser.uid
+  const qry = query(collection(realDb, 'salas'), where(`participantes.${uid}.uid`, '==', uid))
   const snap = await getDocs(qry)
   return snap.docs.map((d) => ({ codigo: d.id, ...d.data() }))
 }
 
 export const excluirSala = async (codigo) => {
-  if (!db) throw new Error('Firebase nao inicializado')
-  const precosRef = collection(db, 'salas', codigo, 'precos')
+  if (!isFirebaseConfigured) return mockExcluirSala(codigo)
+  if (!realDb) throw new Error('Firebase nao inicializado')
+  const precosRef = collection(realDb, 'salas', codigo, 'precos')
   const snap = await getDocs(precosRef)
   const docs = snap.docs
-  // writeBatch em vez de Promise.all de deletes soltos: cada lote é
-  // atômico (tudo ou nada) e evita disparar centenas de requisições
-  // paralelas independentes numa sala com muitos produtos×mercados.
-  // 400 por lote, com folga do limite de 500 operações por batch do
-  // Firestore.
   for (let i = 0; i < docs.length; i += 400) {
     const lote = docs.slice(i, i + 400)
-    const batch = writeBatch(db)
+    const batch = writeBatch(realDb)
     lote.forEach((d) => batch.delete(d.ref))
     await batch.commit()
   }
-  await deleteDoc(doc(db, 'salas', codigo))
+  await deleteDoc(doc(realDb, 'salas', codigo))
 }

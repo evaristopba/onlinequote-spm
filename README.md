@@ -95,6 +95,29 @@ Login anônimo aberto significa que, tecnicamente, um script fora do navegador (
 
 > Se você ativar o enforcement no passo 5 **antes** de confirmar o passo 4, o app para de funcionar pra todo mundo (inclusive você) até reverter. A chave do reCAPTCHA sozinha não faz nada — ela só tem efeito depois que o enforcement é ligado.
 
+### 9. Proteção Anti-bot com CAPTCHA Gratuito (Cloudflare Turnstile) e Vercel
+
+Para proteger a criação e entrada de salas contra bots, scripts maliciosos e ataques automatizados **sem precisar de cadastro de cartão de crédito**:
+- O app utiliza **Cloudflare Turnstile**, que é 100% gratuito e não exige cartão de crédito.
+- Conta com validação dupla: no navegador (widget visual) e no servidor (Vercel Serverless Function `/api/verify-turnstile.js`).
+- Em desenvolvimento/teste, funciona imediatamente com uma chave de teste oficial e conta com fallback local inteligente caso esteja sem conexão externa.
+
+#### Como funciona a segurança das chaves:
+1. **`VITE_TURNSTILE_SITE_KEY` (Chave Pública)**: É a chave que renderiza o widget no navegador. Como qualquer CAPTCHA da web, ela é pública por design. O que impede alguém de roubá-la e usá-la em outro site é a **Lista de Domínios Permitidos** que você configura no painel da Cloudflare (apenas seu domínio pode disparar desafios válidos).
+2. **`TURNSTILE_SECRET_KEY` (Chave Secreta)**: É a chave de validação no servidor. **Ela NUNCA deve ir para o Git nem para o código do navegador**. Fica apenas nas configurações da Vercel.
+
+#### Como configurar na Vercel:
+1. Crie uma conta gratuita em [dash.cloudflare.com](https://dash.cloudflare.com) (sem cartão).
+2. Vá em **Turnstile** → **Add Site**.
+3. Adicione seu domínio da Vercel (ex: `seu-app.vercel.app`).
+4. A Cloudflare fornecerá duas chaves: **Site Key** e **Secret Key**.
+5. No painel da **Vercel**:
+   - Vá em **Project Settings** → **Environment Variables**.
+   - Adicione:
+     - `VITE_TURNSTILE_SITE_KEY`: cole sua Site Key pública.
+     - `TURNSTILE_SECRET_KEY`: cole sua Secret Key privada.
+6. Faça o deploy (ou re-deploy). Nenhuma chave secreta fica exposta em arquivo ou no GitHub!
+
 ---
 
 ## 📷 Scanner — Fluxo Híbrido

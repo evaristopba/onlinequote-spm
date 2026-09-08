@@ -9,6 +9,8 @@ import CadastrarProduto from './CadastrarProduto.jsx'
 import ProdutoModal from './ProdutoModal.jsx'
 import { formatarQuantidade, parseQuantidadeExistente } from '../utils/ptBR.js'
 import { avisar } from '../utils/dialog.js'
+import CaptchaWidget from './CaptchaWidget.jsx'
+import { validarTokenNoServidor } from '../utils/turnstile.js'
 
 export default function CriarSala() {
   const nav = useNavigate()
@@ -16,6 +18,7 @@ export default function CriarSala() {
   const [mercado, setMercado] = useState('')
   const [nomeSala, setNomeSala] = useState('')
   const [produtos, setProdutos] = useState([])
+  const [captchaToken, setCaptchaToken] = useState(null)
   const [mostrarScanner, setMostrarScanner] = useState(false)
   const [mostrarCadastro, setMostrarCadastro] = useState(null)
   const [mostrarProdutoModal, setMostrarProdutoModal] = useState(null)
@@ -186,8 +189,15 @@ export default function CriarSala() {
   const handleCriar = async () => {
     if (!nome.trim() || !mercado.trim()) { avisar('Preencha nome e mercado'); return }
     if (produtos.length === 0) { avisar('Adicione pelo menos um produto'); return }
+    if (!captchaToken) { avisar('Por favor, confirme a verificação anti-bot'); return }
     setCarregando(true)
     try {
+      const validacao = await validarTokenNoServidor(captchaToken)
+      if (!validacao.ok) {
+        avisar(validacao.error || 'Falha na validação de segurança.')
+        setCarregando(false)
+        return
+      }
       const c = await criarSala(nomeSala || 'Cotação', produtos, nome.trim(), mercado.trim())
       await Promise.all(produtos.map((p, i) => p.preco != null ? lancarPreco(c, `p${i}`, mercado, p.preco) : null))
       nav(`/sala/${c}`)
@@ -324,7 +334,8 @@ export default function CriarSala() {
           </div>
         )}
       </div>
-      <button onClick={handleCriar} disabled={carregando} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '1rem', opacity: carregando ? 0.6 : 1 }}>
+      <CaptchaWidget onVerify={setCaptchaToken} onExpire={() => setCaptchaToken(null)} id="captcha-criar" />
+      <button onClick={handleCriar} disabled={carregando || !captchaToken} style={{ width: '100%', padding: '14px', borderRadius: 10, border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '1rem', opacity: (carregando || !captchaToken) ? 0.6 : 1, cursor: (carregando || !captchaToken) ? 'not-allowed' : 'pointer' }}>
         {carregando ? 'Criando...' : '🚀 Criar Sala'}
       </button>
       {mostrarScanner && (
