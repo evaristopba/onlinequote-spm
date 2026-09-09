@@ -17,16 +17,31 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getAppCheck } from 'firebase-admin/app-check'
 
+// Aceita FIREBASE_SERVICE_ACCOUNT tanto como o JSON cru quanto o mesmo
+// JSON codificado em base64. Base64 é bem mais seguro de colar num
+// campo de variável de ambiente — o problema clássico é um editor
+// "ajudar" trocando os `\n` literais dentro de private_key por quebra
+// de linha de verdade, o que invalida o JSON silenciosamente. Em
+// base64 isso nunca acontece (é tudo texto numa linha só, sem
+// caracteres especiais).
+function decodificarCredencial(valor) {
+  try {
+    return JSON.parse(valor)
+  } catch (e) {
+    try {
+      const decodificado = Buffer.from(valor, 'base64').toString('utf-8')
+      return JSON.parse(decodificado)
+    } catch (e2) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT nao e um JSON valido (nem cru, nem em base64)')
+    }
+  }
+}
+
 function obterAppAdmin() {
   if (getApps().length) return getApps()[0]
   const credencialJson = process.env.FIREBASE_SERVICE_ACCOUNT
   if (!credencialJson) throw new Error('FIREBASE_SERVICE_ACCOUNT nao configurada')
-  let credencial
-  try {
-    credencial = JSON.parse(credencialJson)
-  } catch (e) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT nao e um JSON valido')
-  }
+  const credencial = decodificarCredencial(credencialJson)
   return initializeApp({ credential: cert(credencial) })
 }
 

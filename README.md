@@ -94,7 +94,10 @@ Aqui usamos o **Cloudflare Turnstile** em vez do reCAPTCHA do Google — gratuit
 3. No Vercel, cadastre estas variáveis de ambiente (Settings → Environment Variables) — **atenção, o tipo muda por variável**:
    - `VITE_TURNSTILE_SITE_KEY` = a Site Key do passo 1 → tipo **"Config"** (o Vite precisa ler ela em tempo de build pra "assar" no bundle; como "Secret" ela não fica disponível nessa hora)
    - `TURNSTILE_SECRET_KEY` = a Secret Key do passo 1 → tipo **"Secret"** (só é lida dentro da função serverless, em tempo de execução, nunca no build)
-   - `FIREBASE_SERVICE_ACCOUNT` = o conteúdo **inteiro** do arquivo `.json` do passo 2, colado como uma linha só → tipo **"Secret"** (é uma credencial de admin completa do seu projeto Firebase — a mais sensível das quatro)
+   - `FIREBASE_SERVICE_ACCOUNT` = o conteúdo do arquivo `.json` do passo 2 → tipo **"Secret"** (é uma credencial de admin completa do seu projeto Firebase — a mais sensível das quatro). **Recomendado: cole em base64, não o JSON cru** — colar o JSON direto é a causa nº1 de erro aqui, porque o campo `private_key` tem `\n` literais dentro da string, e é fácil um editor "ajudar" trocando isso por quebra de linha de verdade, o que invalida o JSON silenciosamente. Em base64 isso nunca acontece. Pra gerar:
+     - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("caminho\para\arquivo.json"))`
+     - Mac/Linux (terminal): `base64 -i caminho/para/arquivo.json`
+     - Cola o resultado (uma linha só, sem espaços) como valor da variável. A função aceita os dois formatos (JSON cru ou base64), então funciona de qualquer jeito — mas base64 evita o erro mais comum.
    - `FIREBASE_APP_ID` = o mesmo valor que já está em `VITE_FIREBASE_APP_ID` → tipo **"Secret"** (não é exatamente sigiloso, mas também só é lido em runtime, então não precisa estar em "Config")
 4. Faça o **deploy**
 5. Abra o app publicado, F12 → Console — não deve aparecer erro de App Check. Na aba Network, deve aparecer uma chamada pra `/api/mint-app-check-token` retornando 200
