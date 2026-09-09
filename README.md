@@ -81,42 +81,28 @@ O painel administrativo (`/admin`) permite excluir **qualquer** sala do banco (n
 
 > Sem esse setup, a rota `/admin` mostra a tela de login mas ninguém consegue fazer nada nela — as regras do Firestore bloqueiam qualquer exclusão de sala alheia ou remoção definitiva de produto pra quem não tiver um documento em `admins/<uid>`.
 
-### 8. App Check (opcional, recomendado antes de divulgar o app)
+### 8. App Check via Cloudflare Turnstile (opcional, recomendado antes de divulgar o app)
 
 Login anônimo aberto significa que, tecnicamente, um script fora do navegador (não uma pessoa usando o app de verdade) consegue chamar as mesmas APIs do Firebase e criar milhares de sessões, salas ou produtos falsos. O [App Check](https://firebase.google.com/docs/app-check) resolve isso: só libera as chamadas ao Firestore/Auth se vierem do seu app de verdade, rodando num navegador de verdade.
 
-**⚠️ Ordem importa — siga exatamente assim, nessa sequência:**
+Aqui usamos o **Cloudflare Turnstile** em vez do reCAPTCHA do Google — gratuito, sem conta Google Cloud. O Turnstile sozinho não fala a língua do App Check, então uma função serverless (`api/mint-app-check-token.js`, já incluída, roda na própria Vercel) faz a ponte: valida o token do Turnstile e emite um token de App Check de verdade via Firebase Admin.
 
-1. Firebase Console → **App Check** → registre um provedor **reCAPTCHA v3** para o seu app web → copie a **chave do site** (site key)
-2. Coloque essa chave em `VITE_RECAPTCHA_SITE_KEY` no `.env` (e nas variáveis de ambiente do Vercel)
-3. Faça o **deploy** com essa variável configurada
-4. Volte no Firebase Console → App Check → confira, na aba de métricas, se as requisições do app estão chegando como **verificadas** (pode levar alguns minutos)
-5. **Só depois de confirmar isso**, vá em Firestore Database → App Check → e ative o **modo de aplicação (enforcement)**
+**Passo a passo:**
 
-> Se você ativar o enforcement no passo 5 **antes** de confirmar o passo 4, o app para de funcionar pra todo mundo (inclusive você) até reverter. A chave do reCAPTCHA sozinha não faz nada — ela só tem efeito depois que o enforcement é ligado.
+1. **Cloudflare** → [dash.cloudflare.com/?to=/:account/turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) → **Add widget** → domínio = a URL do seu app (só o host, ex: `onlinequote-spm.vercel.app`, sem `https://` nem barra) → modo **Invisible** (recomendado — não aparece nada na tela; "Managed" também funciona, só pode deixar um selinho visível de vez em quando) → copie a **Site Key** e a **Secret Key**
+2. **Firebase Console** → ⚙️ Configurações do projeto → **Contas de serviço** → **Gerar nova chave privada** → baixa um arquivo `.json`
+3. No Vercel, cadastre estas variáveis de ambiente (Settings → Environment Variables) — **atenção, o tipo muda por variável**:
+   - `VITE_TURNSTILE_SITE_KEY` = a Site Key do passo 1 → tipo **"Config"** (o Vite precisa ler ela em tempo de build pra "assar" no bundle; como "Secret" ela não fica disponível nessa hora)
+   - `TURNSTILE_SECRET_KEY` = a Secret Key do passo 1 → tipo **"Secret"** (só é lida dentro da função serverless, em tempo de execução, nunca no build)
+   - `FIREBASE_SERVICE_ACCOUNT` = o conteúdo **inteiro** do arquivo `.json` do passo 2, colado como uma linha só → tipo **"Secret"** (é uma credencial de admin completa do seu projeto Firebase — a mais sensível das quatro)
+   - `FIREBASE_APP_ID` = o mesmo valor que já está em `VITE_FIREBASE_APP_ID` → tipo **"Secret"** (não é exatamente sigiloso, mas também só é lido em runtime, então não precisa estar em "Config")
+4. Faça o **deploy**
+5. Abra o app publicado, F12 → Console — não deve aparecer erro de App Check. Na aba Network, deve aparecer uma chamada pra `/api/mint-app-check-token` retornando 200
+6. **Só depois de confirmar o passo 5**, vá no Firebase Console → Firestore Database → App Check → e ative o **modo de aplicação (enforcement)**
 
-### 9. Proteção Anti-bot com CAPTCHA Gratuito (Cloudflare Turnstile) e Vercel
+> Se você ativar o enforcement no passo 6 **antes** de confirmar o passo 5, o app para de funcionar pra todo mundo (inclusive você) até reverter.
 
-Para proteger a criação e entrada de salas contra bots, scripts maliciosos e ataques automatizados **sem precisar de cadastro de cartão de crédito**:
-- O app utiliza **Cloudflare Turnstile**, que é 100% gratuito e não exige cartão de crédito.
-- Conta com validação dupla: no navegador (widget visual) e no servidor (Vercel Serverless Function `/api/verify-turnstile.js`).
-- Em desenvolvimento/teste, funciona imediatamente com uma chave de teste oficial e conta com fallback local inteligente caso esteja sem conexão externa.
-
-#### Como funciona a segurança das chaves:
-1. **`VITE_TURNSTILE_SITE_KEY` (Chave Pública)**: É a chave que renderiza o widget no navegador. Como qualquer CAPTCHA da web, ela é pública por design. O que impede alguém de roubá-la e usá-la em outro site é a **Lista de Domínios Permitidos** que você configura no painel da Cloudflare (apenas seu domínio pode disparar desafios válidos).
-2. **`TURNSTILE_SECRET_KEY` (Chave Secreta)**: É a chave de validação no servidor. **Ela NUNCA deve ir para o Git nem para o código do navegador**. Fica apenas nas configurações da Vercel.
-
-#### Como configurar na Vercel:
-1. Crie uma conta gratuita em [dash.cloudflare.com](https://dash.cloudflare.com) (sem cartão).
-2. Vá em **Turnstile** → **Add Site**.
-3. Adicione seu domínio da Vercel (ex: `seu-app.vercel.app`).
-4. A Cloudflare fornecerá duas chaves: **Site Key** e **Secret Key**.
-5. No painel da **Vercel**:
-   - Vá em **Project Settings** → **Environment Variables**.
-   - Adicione:
-     - `VITE_TURNSTILE_SITE_KEY`: cole sua Site Key pública.
-     - `TURNSTILE_SECRET_KEY`: cole sua Secret Key privada.
-6. Faça o deploy (ou re-deploy). Nenhuma chave secreta fica exposta em arquivo ou no GitHub!
+> `TURNSTILE_SECRET_KEY`, `FIREBASE_SERVICE_ACCOUNT` e `FIREBASE_APP_ID` **nunca** levam prefixo `VITE_` — são lidas só pela função serverless (`process.env`, roda no servidor da Vercel), nunca pelo código que vai pro navegador. Só `VITE_TURNSTILE_SITE_KEY` é pública mesmo (é assim que o Turnstile funciona, a site key sempre fica visível no código do cliente).
 
 ---
 
@@ -175,27 +161,17 @@ Na tela da sala há duas visões da tabela:
 
 ---
 
-## 🔁 Comparar tamanhos/embalagens & Vínculo de Variantes
+## 🔁 Comparar tamanhos/embalagens (novo)
 
-Pra combater a "falsa promoção" e decidir se realmente compensa levar embalagens maiores ou kits econômicos (ex.: sabão em pó 800g vs 1,6kg vs 2,4kg; creme dental 70g vs 180g; amaciante 500ml vs 1L):
+Pra decidir se compensa levar 1 pacote grande em vez de 2 pequenos (ex.: creme dental 75g vs 180g), vincule os dois na base própria:
 
-### Como funciona o vínculo:
-1. **🛠️ Manutenção de Produtos** (ou no próprio card/modal do produto) → localize o item → clique em **🔗 Variante**.
-2. Busque pelo nome a outra embalagem/versão já cadastrada e clique em **Vincular**.
-3. O identificador comum (`grupoVariante`) fica registrado no Firestore — **não precisa refazer em cada nova cotação**.
-4. Se você vincular um item a outro que já pertence a uma família de variantes, o sistema **funde os grupos automaticamente** sem perder os vínculos anteriores.
-5. Para remover um produto do grupo, basta clicar em **✂️ Desvincular**.
+1. **🛠️ Manutenção de Produtos** → ache o produto → **🔗 Variante** → busque o outro tamanho pelo nome e vincule
+2. O vínculo (`grupoVariante`) fica salvo na base — não precisa refazer em cada cotação
+3. Quando os dois produtos vinculados estiverem na **mesma cotação** e já tiverem **pelo menos um preço lançado**, aparece o bloco **"🔁 Comparar tamanhos/embalagens"** na tela da sala, com o custo por kg/L de cada um lado a lado e o mais em conta destacado
 
-### Como ajuda na cotação:
-Quando dois ou mais produtos de um mesmo grupo de variantes entram na **mesma sala de cotação** e recebem preços dos mercados:
-1. **Normalização Automática de Unidade**: O app converte gramas para **Quilogramas (kg)** e mililitros para **Litros (L)**.
-2. **Custo Real Relativo**: Calcula o valor exato por kg ou L para cada opção pesquisada:
-   * *Exemplo*: Frasco 500ml por R$ 9,90 = **R$ 19,80 / L**
-   * *Exemplo*: Refil 1 Litro por R$ 16,50 = **R$ 16,50 / L**
-3. **Selo Troféu 🏆**: O produto com menor custo unitário real recebe o troféu verde de destaque.
-4. **Cálculo de Economia**: A tela exibe um alerta automático indicando a economia percentual exata (ex.: *"💡 Levar Refil 1L sai até 17% mais em conta por Litro do que Frasco 500ml"*).
+Pra desvincular, use **✂️ Desvincular** na Manutenção. Vincular um produto que já tem outra variante a um terceiro funde os grupos automaticamente, sem perder nenhum vínculo já feito.
 
-> **Por que é manual?** A decisão de equivalência é do usuário: o sistema não tenta adivinhar por semelhança de texto, evitando unir acidentalmente marcas ou fórmulas com qualidades diferentes.
+> É um vínculo **manual** por escolha — o app não tenta adivinhar por semelhança de nome, porque isso arriscaria juntar produtos diferentes por engano.
 
 ---
 
@@ -228,6 +204,9 @@ Onde encontrar:
 ## 📁 Estrutura
 
 ```
+api/
+└── mint-app-check-token.js  # valida Turnstile + emite token de App Check (Vercel Function)
+
 src/
 ├── main.jsx
 ├── App.jsx                  # + botão "Retomar sala"
@@ -240,6 +219,8 @@ src/
 │   ├── precos.js            # leitura de preço/oferta + tipos de oferta
 │   ├── conexao.js           # status online/offline + última sala
 │   ├── linkParticipante.js  # link pessoal de participante (nome+mercado na URL)
+│   ├── mercados.js          # normalização de nome de mercado (trim + case-insensitive)
+│   ├── turnstileAppCheck.js # obtém token do Turnstile sob demanda pro App Check
 │   └── dialog.js            # substitui alert()/confirm() nativos
 └── components/
     ├── CriarSala.jsx        # Busca híbrida

@@ -1,95 +1,28 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { entrarSala } from '../firebase.js'
-import { avisar } from '../utils/dialog.js'
-import CaptchaWidget from './CaptchaWidget.jsx'
-import { validarTokenNoServidor } from '../utils/turnstile.js'
-
-export default function EntrarSala() {
-  const nav = useNavigate()
-  const [codigo, setCodigo] = useState('')
-  const [nome, setNome] = useState('')
-  const [mercado, setMercado] = useState('')
-  const [captchaToken, setCaptchaToken] = useState(null)
-  const [carregando, setCarregando] = useState(false)
-
-  const handleEntrar = async () => {
-    if (!codigo.trim() || !nome.trim() || !mercado.trim()) {
-      avisar('Preencha todos os campos')
-      return
-    }
-    if (!captchaToken) {
-      avisar('Por favor, confirme a verificação anti-bot')
-      return
-    }
+import{useState}from'react'
+import{useNavigate}from'react-router-dom'
+import{entrarSala}from'../firebase.js'
+import{avisar}from'../utils/dialog.js'
+export default function EntrarSala(){
+  const nav=useNavigate()
+  const[codigo,setCodigo]=useState('')
+  const[nome,setNome]=useState('')
+  const[mercado,setMercado]=useState('')
+  const[carregando,setCarregando]=useState(false)
+  const handleEntrar=async()=>{
+    if(!codigo.trim()||!nome.trim()||!mercado.trim()){avisar('Preencha todos os campos');return}
     setCarregando(true)
-    try {
-      const validacao = await validarTokenNoServidor(captchaToken)
-      if (!validacao.ok) {
-        avisar(validacao.error || 'Falha na validação de segurança.')
-        setCarregando(false)
-        return
-      }
-      await entrarSala(codigo.toUpperCase(), nome.trim(), mercado.trim())
-      nav(`/sala/${codigo.toUpperCase()}`)
-    } catch (e) {
-      avisar(e.message)
-      setCarregando(false)
-    }
+    try{await entrarSala(codigo.toUpperCase(),nome.trim(),mercado.trim());nav(`/sala/${codigo.toUpperCase()}`)}
+    catch(e){avisar(e.message);setCarregando(false)}
   }
-
-  return (
-    <div style={{ maxWidth: 420, margin: '0 auto', padding: '40px 16px' }}>
-      <h2 style={{ marginBottom: 20 }}>🔐 Entrar na Cotação</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <input
-          placeholder="Código da sala (ex: X7K9P2)"
-          value={codigo}
-          onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-          style={inp}
-        />
-        <input
-          placeholder="Seu nome"
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          style={inp}
-        />
-        <input
-          placeholder="Mercado que você vai cotar"
-          value={mercado}
-          onChange={(e) => setMercado(e.target.value)}
-          style={inp}
-        />
-
-        <CaptchaWidget
-          onVerify={setCaptchaToken}
-          onExpire={() => setCaptchaToken(null)}
-          id="captcha-entrar"
-        />
-
-        <button
-          onClick={handleEntrar}
-          disabled={carregando || !captchaToken}
-          style={{
-            padding: '14px',
-            borderRadius: 10,
-            border: 'none',
-            background: '#3b82f6',
-            color: 'white',
-            fontWeight: 700,
-            fontSize: '1rem',
-            opacity: carregando || !captchaToken ? 0.6 : 1,
-            cursor: carregando || !captchaToken ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {carregando ? 'Entrando...' : 'Entrar na Sala'}
-        </button>
-      </div>
-      <p style={{ marginTop: 16, fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center' }}>
-        💡 Peça o código de 6 letras para quem criou a cotação
-      </p>
+  return<div style={{maxWidth:420,margin:'0 auto',padding:'40px 16px'}}>
+    <h2 style={{marginBottom:20}}>🔐 Entrar na Cotação</h2>
+    <div style={{display:'flex',flexDirection:'column',gap:12}}>
+      <input placeholder="Código da sala (ex: X7K9P2)" value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())} style={inp}/>
+      <input placeholder="Seu nome" value={nome} onChange={e=>setNome(e.target.value)} style={inp}/>
+      <input placeholder="Mercado que você vai cotar" value={mercado} onChange={e=>setMercado(e.target.value)} style={inp}/>
+      <button onClick={handleEntrar} disabled={carregando} style={{padding:'14px',borderRadius:10,border:'none',background:'#3b82f6',color:'white',fontWeight:700,fontSize:'1rem'}}>{carregando?'Entrando...':'Entrar na Sala'}</button>
     </div>
-  )
+    <p style={{marginTop:16,fontSize:'0.85rem',color:'#94a3b8',textAlign:'center'}}>💡 Peça o código de 6 letras para quem criou a cotação</p>
+  </div>
 }
-
-const inp = { padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.95rem', outline: 'none' }
+const inp={padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:'0.95rem',outline:'none'}
